@@ -1,6 +1,12 @@
 # Setup and development
 
-Build with `scripts/build-native.sh` for an app bundle, or `scripts/build-dmg.sh` for an installable disk image. Both package the extension and canvas. These are architecture-specific, ad-hoc signed builds, not notarized releases.
+Build with `scripts/build-native.sh` for an app bundle, or `scripts/build-dmg.sh` for an installable disk image. Both package the extension and canvas. Builds are architecture-specific and ad-hoc signed by default. To sign a release with a Developer ID Application identity installed in your Keychain:
+
+```sh
+CUE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" scripts/build-dmg.sh
+```
+
+This signs the app with hardened runtime and a secure timestamp, and also signs the DMG. Apple notarization and stapling are separate steps; consult the release notes for the distributed image’s status. Never commit signing keys, passwords, or notarization credentials.
 
 The app uses `~/Library/Application Support/Cue/` for its local database, model cache, downloaded AI tools, and prepared extension. Do not load an unpacked extension directly from a mounted disk image. Use Settings → Connect Chrome to prepare its persistent folder, then manually load that folder in Chrome and enter its ID in Cue. A different unpacked folder can receive a different extension ID and storage area.
 

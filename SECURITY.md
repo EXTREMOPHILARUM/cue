@@ -8,4 +8,4 @@ Optional AI features send transcripts and explicitly attached context to the sel
 
 Provider tools download from pinned manifests. Node archives are SHA-256 checked, npm packages use lockfile integrity verification, and installation scripts are disabled. Provider sign-in and upstream service security remain separate concerns.
 
-Call capture, speaker labels, and generated output require human review. Coaching may appear in screen sharing. Current disk images are ad-hoc signed and not notarized.
+Call capture, speaker labels, and generated output require human review. Coaching may appear in screen sharing. Local builds use ad-hoc signing by default. Distributed releases identify their Developer ID signing and Apple notarization status in the release notes.

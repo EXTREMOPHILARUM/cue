@@ -18,7 +18,11 @@ extension="$app/Contents/Resources/CallAssistant_CallAssistant.bundle/Contents/R
 test -f "$extension/manifest.json"
 ditto "$extension" "$stage/Cue Extension"
 hdiutil create -volname Cue -srcfolder "$stage" -format UDZO -ov "$image/Cue.dmg"
+if [ "${CUE_SIGNING_IDENTITY:--}" != "-" ]; then
+    codesign --force --timestamp --sign "$CUE_SIGNING_IDENTITY" "$image/Cue.dmg"
+    codesign --verify --strict "$image/Cue.dmg"
+fi
 hdiutil verify "$image/Cue.dmg"
 mv -f "$image/Cue.dmg" "$output"
-shasum -a 256 "$output" > "$output.sha256"
+(cd "$root/build" && shasum -a 256 "$(basename "$output")") > "$output.sha256"
 printf '%s\n' "$output"

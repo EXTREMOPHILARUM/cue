@@ -10,6 +10,6 @@ Requires macOS 14 or later. This image is built for the architecture in its file
 6. Existing users: keep the current extension ID and unpacked folder to preserve browser history. Do not install a duplicate extension. Update/reload only outside a call.
 7. Eject this disk after installation. Your calls and downloaded model are kept separately from the application.
 
-This is a local build with ad-hoc signing, not a notarized public release. macOS may block downloaded copies. Public distribution requires Developer ID signing and notarization; this image does not bypass Gatekeeper.
+Check the release notes for this image’s signing and notarization status. Local source builds use ad-hoc signing by default; release builds can use Developer ID signing. Signing alone is not Apple notarization, and macOS may block a downloaded image that is not notarized.
 
 AI summaries and coaching download the selected provider’s pinned tools on first use (internet required). Settings shows setup progress and lets you retry. Tools are cached in your Application Support folder, separately from the app. Only the selected provider is downloaded. These features use the separately configured provider; the speech model download does not include cloud AI credentials or subscriptions.

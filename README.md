@@ -52,7 +52,9 @@ Transcription supports Roman Hinglish and English through WhisperKit. Optional C
 
 ## Quickstart
 
-**You’ll need:** macOS 14+, Google Chrome, Xcode Command Line Tools with Swift 5.10+, and Node.js 22+ with npm. Packaged builds currently target Apple Silicon; Intel is not yet verified.
+**Install:** Get the Apple Silicon DMG from [GitHub Releases](https://github.com/EXTREMOPHILARUM/cue/releases/latest). You’ll need macOS 14+, Google Chrome, and internet for initial downloads. Intel is not yet verified.
+
+**Build from source:** You’ll additionally need Xcode Command Line Tools with Swift 5.10+ and Node.js 22+ with npm.
 
 ### 1. Build the app
 
@@ -64,7 +66,7 @@ scripts/build-dmg.sh
 
 Open the disk image under `build/`, drag **Cue** into **Applications**, and launch it. The extension is included in both the app and the disk image.
 
-> Builds currently use local ad-hoc signing and are **not notarized**. A buildable open-source project is provided; a notarized one-click macOS release is not yet available.
+> Local builds use ad-hoc signing by default. Published releases identify their Developer ID signing and notarization status in the release notes.
 
 ### 2. Connect Chrome
 

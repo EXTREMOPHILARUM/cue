@@ -19,5 +19,10 @@ cp scripts/cue.mjs "$app/Contents/Resources/cue.mjs"
 cp scripts/call-assistant.mjs "$app/Contents/Resources/call-assistant.mjs"
 # Old build folders may still contain the formerly bundled provider tools.
 rm -rf "$app/Contents/Resources/AgentRuntime"
-codesign --force --deep --sign - "$app"
+identity=${CUE_SIGNING_IDENTITY:--}
+if [ "$identity" = "-" ]; then
+    codesign --force --deep --sign - "$app"
+else
+    codesign --force --options runtime --timestamp --sign "$identity" "$app"
+fi
 printf '%s\n' "$app"
