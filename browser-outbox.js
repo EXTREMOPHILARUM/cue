@@ -1,0 +1,9 @@
+// Owned by the extension origin. Delete only the exact version acknowledged by the desktop.
+class BrowserOutbox {
+  constructor() { this.database = new Promise((resolve,reject) => { const request=indexedDB.open('call-assistant-outbox',2); request.onupgradeneeded=()=>{const store=request.result.objectStoreNames.contains('pending')?request.transaction.objectStore('pending'):request.result.createObjectStore('pending',{keyPath:'key'});if(!store.indexNames.contains('created'))store.createIndex('created','created');}; request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error); }); }
+  async transaction(mode,work) { const db=await this.database; return new Promise((resolve,reject)=>{const tx=db.transaction('pending',mode);const store=tx.objectStore('pending');let result;tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error || new Error('Queue transaction aborted'));work(store,value=>{result=value;});}); }
+  async put(key,payload) { return this.transaction('readwrite',(store,done)=>{const get=store.get(key);get.onsuccess=()=>{const entry={key,payload,version:crypto.randomUUID(),created:get.result?.created ?? Date.now()};store.put(entry);done(entry);};}); }
+  async list(limit=20) { return this.transaction('readonly',(store,done)=>{const request=store.index('created').getAll(undefined,limit);request.onsuccess=()=>done(request.result.sort((a,b)=>a.created-b.created || a.key.localeCompare(b.key)));}); }
+  async count() { return this.transaction('readonly',(store,done)=>{const request=store.count();request.onsuccess=()=>done(request.result);}); }
+  async acknowledge(entry) { return this.transaction('readwrite',store=>{const request=store.get(entry.key);request.onsuccess=()=>{if(request.result?.version===entry.version)store.delete(entry.key);};}); }
+}

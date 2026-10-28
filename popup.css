@@ -1,0 +1,13 @@
+body { display: flex; flex-direction: column; overflow-y: auto; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 14px; flex: none; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; white-space: nowrap; }
+.status .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.status.live { color: var(--success); background: var(--success-bg); border-color: transparent; }
+#native-status { margin: 0 20px 14px; flex: none; }
+main { display: flex; flex-direction: column; padding: 0 20px; gap: 18px; }
+.current-call { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; flex: none; }
+.current-call .eyebrow { display: block; margin-bottom: 8px; }
+.active-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; color: var(--muted); font-size: 11px; margin-top: 8px; overflow-wrap: anywhere; }
+h2 { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.desktop-note { margin: 0 0 20px; color: var(--muted); font-size: 12px; line-height: 1.6; }

@@ -1,0 +1,15 @@
+Cue
+Copyright (c) 2026 EXTREMOPHILARUM
+
+The root MIT license applies to original Cue code. It does not relicense
+third-party material.
+
+meet-speakers.js and adapted portions of meet-routing.js and call-media.js
+retain Apache-2.0 licensing and attribution from Kuali and its cited upstreams.
+See docs/licenses/kuali-NOTICE.txt and docs/licenses/kuali-apache-2.0.txt.
+Source: https://github.com/igarrux/kuali
+
+WhisperKit, OpenUI, React, Node.js, ACP adapters, provider tools, and model weights
+retain their upstream licenses. Dependency manifests identify their sources.
+Model weights and AI provider executables are downloaded separately and are
+not included in the repository or DMG.

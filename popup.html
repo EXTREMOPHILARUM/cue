@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cue</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="extension-ui.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/></svg></span>
+      <div><h1>Cue</h1><span class="brand-sub">Call capture · <span id="version"></span></span></div>
+    </div>
+    <div class="header-actions">
+      <div class="status" id="status-pill"><span class="dot" aria-hidden="true"></span><span id="status-text">Idle</span></div>
+      <a class="settings-link icon-link" href="settings.html" aria-label="Settings" title="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--surface)"/><circle cx="15" cy="17" r="3" fill="var(--surface)"/></svg></a>
+    </div>
+  </header>
+
+  <div id="native-status" class="connection-banner" role="status">Checking desktop app…</div>
+  <main>
+    <section class="current-call" aria-labelledby="current-call-label">
+      <p class="eyebrow" id="current-call-label">Current conversation</p>
+      <h2 id="call-name">No active Meet call</h2>
+      <div class="active-meta" id="current-meta">
+        <span>Open a Google Meet tab to begin capturing</span>
+      </div>
+    </section>
+
+    <p class="desktop-note">Your call library, summaries, and coaching are in the Cue desktop app.</p>
+  </main>
+
+  <script src="popup.js"></script>
+  <script src="native-popup.js"></script>
+</body>
+</html>

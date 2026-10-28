@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>io.github.extremophilarum.cue</string>
+<key>CFBundleName</key><string>Cue</string>
+<key>CFBundleDisplayName</key><string>Cue</string>
+<key>CFBundleExecutable</key><string>Cue</string>
+<key>CFBundleVersion</key><string>4</string>
+<key>CFBundleShortVersionString</key><string>0.1.3</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleIconFile</key><string>AppIcon</string>
+<key>LSUIElement</key><false/>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+<key>NSCalendarsFullAccessUsageDescription</key><string>Read your calendar to match calls to scheduled meetings. Cue does not create or edit events.</string>
+</dict></plist>

@@ -1,0 +1,69 @@
+import XCTest
+import AppKit
+import SwiftUI
+@testable import CallAssistant
+
+final class DesignTests:XCTestCase {
+    @MainActor func testWorkspaceAndSheetsRenderInBothThemes() async throws {
+        _ = NSApplication.shared
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer {try? FileManager.default.removeItem(at:folder)}
+        let model=try AppModel(directory:folder,port:17418)
+        defer {model.server.stop()}
+        let time=Date().timeIntervalSince1970*1000
+        try model.store.snapshot(id:"design-call",record:["id":"design-room","title":"Product design review","started_at":time,"ended_at":time+1000,"participants":["Alex","Morgan"],"captions":[
+            ["speaker":"Alex","text":"Let’s make the next step clear. We should test the prototype with a small group before expanding the rollout.","t":time],
+            ["speaker":"Morgan","text":"Agreed. I’ll share a draft on Friday, and we can review the open questions together.","t":time+500]
+        ]])
+        let summary:[String:Any]=["headline":"A clearer path from conversation to action","summary":"The team agreed to validate the prototype before expanding the rollout.","decisions":["Start with a small pilot."],"actions":["Share a draft on Friday."],"uncertainties":["Confirm who will join the pilot."]]
+        try model.store.append("design-call",kind:"ai-summary",body:summary)
+        model.refreshHistory();model.select("design-call")
+        for index in 1...154 {
+            model.sessions.append(["id":"history-\(index)","title":"Earlier conversation \(index)","startedAt":time-Double(index)*86400000])
+        }
+        model.activeSession=nil;model.selectedDetail=nil
+        let nativeWindow=makeLibraryWindow(model:model)
+        nativeWindow.orderFront(nil)
+        defer {nativeWindow.orderOut(nil)}
+        try await Task.sleep(nanoseconds:200_000_000)
+        XCTAssertLessThanOrEqual(nativeWindow.frame.height,820,"A long sidebar must not enlarge the window")
+        func assertSplitBounds(_ view:NSView) {
+            if view is NSSplitView {
+                XCTAssertLessThanOrEqual(view.frame.height,nativeWindow.contentView!.bounds.height,"Split view must stay inside the window")
+            }
+            for child in view.subviews {assertSplitBounds(child)}
+        }
+        assertSplitBounds(nativeWindow.contentView!)
+        model.select("design-call")
+        for (theme,name) in [(ColorScheme.light,"light"),(ColorScheme.dark,"dark")] {
+            try await render(LibraryView(model:model).preferredColorScheme(theme),name:"library-"+name,size:NSSize(width:1120,height:760))
+            try await render(LibraryView(model:model).preferredColorScheme(theme),name:"library-compact-"+name,size:NSSize(width:800,height:540))
+            try await render(CallSettings(model:model).preferredColorScheme(theme),name:"settings-"+name,size:NSSize(width:580,height:620))
+            try await render(ScrollView {CallAIResult(result:summary).padding(28)}.background(CallPalette.canvas).preferredColorScheme(theme),name:"summary-"+name,size:NSSize(width:700,height:700))
+            try await render(ExtensionSetup(model:model).preferredColorScheme(theme),name:"setup-"+name,size:NSSize(width:580,height:680))
+        }
+    }
+    @MainActor private func render<V:View>(_ root:V,name:String,size:NSSize) async throws {
+        let controller=NSHostingController(rootView:root)
+        controller.sizingOptions=[]
+        let view=controller.view
+        let window=NSWindow(contentRect:NSRect(origin:.zero,size:size),styleMask:[.borderless],backing:.buffered,defer:false)
+        window.appearance=NSAppearance(named:name.hasSuffix("dark") ? .darkAqua:.aqua)
+        view.frame=NSRect(origin:.zero,size:size)
+        window.contentViewController=controller;window.orderFront(nil)
+        defer {window.orderOut(nil)}
+        try await Task.sleep(nanoseconds:100_000_000)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(window.frame.size,size,"Content must scroll rather than enlarge the window")
+        XCTAssertEqual(view.bounds.size,size)
+        let bitmap=try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in:view.bounds))
+        view.cacheDisplay(in:view.bounds,to:bitmap)
+        let data=try XCTUnwrap(bitmap.representation(using:.png,properties:[:]))
+        XCTAssertGreaterThan(data.count,1000)
+        if let path=ProcessInfo.processInfo.environment["CALL_ASSISTANT_DESIGN_SNAPSHOTS"] {
+            let folder=URL(fileURLWithPath:path,isDirectory:true)
+            try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+            try data.write(to:folder.appendingPathComponent(name+".png"))
+        }
+    }
+}

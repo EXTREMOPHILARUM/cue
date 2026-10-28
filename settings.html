@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cue settings</title>
+  <link rel="stylesheet" href="extension-ui.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <header>
+    <a class="icon-link" href="popup.html" aria-label="Back to Cue" title="Back to Cue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></a>
+    <div><h1>Settings</h1><p>Cue in your browser</p></div>
+  </header>
+  <p id="native-status" class="connection-banner" role="status">Checking desktop app…</p>
+  <main>
+    <section aria-labelledby="captions-heading">
+      <h2 id="captions-heading">Meet captions</h2>
+      <label for="hide-captions-toggle"><span>Hide the captions overlay<small>Captions continue saving in the background.</small></span><input type="checkbox" id="hide-captions-toggle"></label>
+    </section>
+    <section id="automatic-controls" aria-labelledby="capture-heading" hidden>
+      <h2 id="capture-heading">Call capture</h2>
+      <label for="auto-capture-toggle"><span>Capture calls automatically<small>Only call media is captured.</small></span><input type="checkbox" id="auto-capture-toggle"></label>
+      <p class="section-note">Unsent data stays in Chrome until Cue receives it.</p>
+    </section>
+    <section aria-labelledby="connection-heading">
+      <h2 id="connection-heading">Desktop connection</h2>
+      <dl><dt>Extension ID</dt><dd><code id="native-extension-id"></code></dd></dl>
+      <div id="manual-controls">
+        <p class="section-note">Select a Google Meet tab behind this popup to use these controls.</p>
+        <div class="actions"><button id="native-connect">Connect this call</button><button id="native-disconnect">Disconnect</button><button id="native-start">Start remote audio</button><button id="native-stop">Stop audio</button></div>
+      </div>
+      <div class="sync-controls"><button id="native-import">Copy saved calls to Cue</button><p class="section-note">Your browser originals are retained.</p></div>
+    </section>
+    <p class="privacy-note">Browser capture and local storage are managed here. AI and coaching preferences are in the Cue desktop app.</p>
+  </main>
+  <script src="native-popup.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>
