@@ -43,6 +43,31 @@ final class DesignTests:XCTestCase {
             try await render(ExtensionSetup(model:model).preferredColorScheme(theme),name:"setup-"+name,size:NSSize(width:580,height:680))
         }
     }
+    @MainActor func testReadmeScreenshotsWhenRequested() async throws {
+        guard ProcessInfo.processInfo.environment["CUE_README_SCREENSHOTS"] != nil else {throw XCTSkip("Opt in to native documentation screenshots")}
+        _ = NSApplication.shared
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let model=try AppModel(directory:folder,port:17419)
+        defer {model.server.stop();try? FileManager.default.removeItem(at:folder)}
+        let time=1793176200000.0
+        let turns:[(String,String)]=[
+            ("Alex","Let’s keep the pilot focused: five teams, two weeks, and one clear success measure."),
+            ("Morgan","Agreed. We should measure whether people can finish their first project without asking for help."),
+            ("Alex","I’ll share the prototype on Friday. Can you line up the five teams and collect their feedback?"),
+            ("Morgan","Yes. I’ll confirm the participants tomorrow and send a short interview guide before we start."),
+            ("Alex","Then let’s review the results together in two weeks and decide what to improve next.")
+        ]
+        let captions=turns.enumerated().map {index,turn in ["speaker":turn.0,"text":turn.1,"t":time+Double(index)*45000] as [String:Any]}
+        try model.store.snapshot(id:"demo-pilot",record:["id":"demo-pilot","title":"Product pilot · Planning review","started_at":time,"ended_at":time+900000,"participants":["Alex","Morgan"],"captions":captions])
+        for (index,title) in ["Website direction","Customer feedback review","Engineering weekly","Launch planning"].enumerated() {
+            try model.store.snapshot(id:"demo-\(index)",record:["id":"demo-\(index)","title":title,"started_at":time-Double(index+1)*86400000,"ended_at":time-Double(index+1)*86400000+900000,"participants":["Alex","Morgan"],"captions":[]])
+        }
+        model.refreshHistory();model.select("demo-pilot")
+        try await render(LibraryView(model:model).preferredColorScheme(.light),name:"readme-library",size:NSSize(width:1120,height:760))
+        let summary:[String:Any]=["headline":"A focused pilot, with a clear next step","summary":"Test the prototype with five teams over two weeks. Measure whether each team can complete its first project independently, then review the findings before expanding the rollout.","decisions":["Start with five teams and a two-week pilot.","Use independent first-project completion as the success measure."],"actions":["Alex: share the prototype on Friday.","Morgan: confirm participants tomorrow and prepare an interview guide.","Together: review the findings in two weeks."],"uncertainties":["Confirm the five participating teams."]]
+        try await render(ScrollView {CallAIResult(result:summary).padding(28)}.background(CallPalette.canvas).preferredColorScheme(.light),name:"readme-summary",size:NSSize(width:700,height:760))
+        try await render(CallSettings(model:model).preferredColorScheme(.light),name:"readme-settings",size:NSSize(width:580,height:680))
+    }
     @MainActor private func render<V:View>(_ root:V,name:String,size:NSSize) async throws {
         let controller=NSHostingController(rootView:root)
         controller.sizingOptions=[]
@@ -63,7 +88,14 @@ final class DesignTests:XCTestCase {
         if let path=ProcessInfo.processInfo.environment["CALL_ASSISTANT_DESIGN_SNAPSHOTS"] {
             let folder=URL(fileURLWithPath:path,isDirectory:true)
             try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
-            try data.write(to:folder.appendingPathComponent(name+".png"))
+            let target=folder.appendingPathComponent(name+".png")
+            if ProcessInfo.processInfo.environment["CUE_README_SCREENSHOTS"] != nil {
+                let capture=Process()
+                capture.executableURL=URL(fileURLWithPath:"/usr/sbin/screencapture")
+                capture.arguments=["-x","-o","-l",String(window.windowNumber),target.path]
+                try capture.run();capture.waitUntilExit()
+                XCTAssertEqual(capture.terminationStatus,0,"Native window capture failed")
+            } else {try data.write(to:target)}
         }
     }
 }

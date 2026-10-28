@@ -1,25 +1,60 @@
-# Cue
+<p align="center">
+  <img src="icons/icon128.png" width="80" height="80" alt="Cue app icon">
+</p>
 
-Cue is a local-first macOS call assistant for Google Meet. A Chrome extension captures captions and call audio; the desktop app stores recordings and transcripts locally, groups recurring calls, and displays a private coaching panel.
+<h1 align="center">Cue</h1>
+<p align="center"><strong>Stay present. Leave with clarity.</strong></p>
+<p align="center">A local-first macOS call assistant for Google Meet.<br>On-device transcripts, useful summaries, and a little guidance when you need it.</p>
 
-## Features
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-333333" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-333333" alt="Requires macOS 14 or later">
+  <img src="https://img.shields.io/badge/Apple_Silicon-tested-333333" alt="Apple Silicon tested">
+</p>
 
-- Local Roman Hinglish and English transcription with WhisperKit.
-- Separate microphone and remote audio, with speaker-attribution evidence. Ambiguous speech stays Unknown.
-- Call history, summaries, source-linked transcript refinement, and recurring project context.
-- Optional Codex or Claude coaching and summaries using your configured provider account.
-- Configurable translucent coaching panel.
-- Bundled Chrome extension with an offline capture queue.
-- On-demand downloads for the speech model and selected AI provider tools.
-- Optional read-only Calendar matching after explicit macOS permission.
+<p align="center">
+  <a href="#quickstart">Get started</a> ·
+  <a href="docs/setup.md">Setup guide</a> ·
+  <a href="docs/architecture.md">Architecture</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
 
-## Requirements
+![Cue's call library and a speaker-labeled transcript of a product pilot planning conversation](docs/screenshots/library.png)
 
-macOS 14 or later, Google Chrome, and an internet connection for initial model/tool downloads. AI features require a separately configured provider account. Current packaged builds target Apple Silicon; Intel is not yet verified.
+<p align="center"><sub>Actual Cue interface, populated with synthetic demo conversations. No private call data is shown.</sub></p>
 
-## Build and install
+## From conversation to follow-through
 
-Development requires Xcode Command Line Tools (Swift 5.10 or newer) and Node.js 22 or newer with npm.
+Cue pairs a small Chrome extension with a native Mac app. The extension captures Google Meet captions and call audio; the app keeps a searchable local library, transcribes audio on your Mac, and helps you revisit decisions and next steps.
+
+| During the call | After the call | Under your control |
+| --- | --- | --- |
+| Capture captions, microphone, and remote audio | Read speaker-labeled, source-linked transcripts | Keep audio and transcripts on your Mac |
+| Receive optional Codex or Claude coaching | Review summaries, decisions, and action items | Choose your AI provider and attached context |
+| Keep guidance in a compact floating panel | Group recurring meetings and share project context | Configure coaching translucency and visibility |
+
+Transcription supports Roman Hinglish and English through WhisperKit. Optional Calendar access matches calls to scheduled meetings after macOS permission. Ambiguous speech stays **Unknown** rather than being assigned an unsupported speaker identity.
+
+<table>
+  <tr>
+    <td width="55%" valign="top">
+      <strong>Decisions and next steps</strong><br>
+      <sub>Structured summaries keep actions and open questions easy to find.</sub><br><br>
+      <img src="docs/screenshots/summary.png" alt="Cue summary cards showing a pilot decision, assigned next steps, and an open question" width="100%">
+    </td>
+    <td width="45%" valign="top">
+      <strong>Your tools, downloaded when needed</strong><br>
+      <sub>Choose a provider, download its tools, and manage local transcription in Settings.</sub><br><br>
+      <img src="docs/screenshots/settings.png" alt="Cue Settings with AI provider selection and on-demand tool and speech-model downloads" width="100%">
+    </td>
+  </tr>
+</table>
+
+## Quickstart
+
+**You’ll need:** macOS 14+, Google Chrome, Xcode Command Line Tools with Swift 5.10+, and Node.js 22+ with npm. Packaged builds currently target Apple Silicon; Intel is not yet verified.
+
+### 1. Build the app
 
 ```sh
 git clone https://github.com/EXTREMOPHILARUM/cue.git
@@ -27,33 +62,56 @@ cd cue
 scripts/build-dmg.sh
 ```
 
-The disk image is created under `build/`. Drag Cue into Applications and launch it. The speech model downloads on first launch (approximately 824 MB). Settings shows its status and provides a retry button.
+Open the disk image under `build/`, drag **Cue** into **Applications**, and launch it. The extension is included in both the app and the disk image.
 
-In Settings, open **Connect Chrome**. Prepare the bundled extension, enable Developer mode in `chrome://extensions`, load the persistent folder Cue reveals, and enter the extension ID in Cue. Install or reload only outside a call. Chrome Web Store installation is not provided.
+> Builds currently use local ad-hoc signing and are **not notarized**. A buildable open-source project is provided; a notarized one-click macOS release is not yet available.
 
-Provider tools download when first used, or through **Download / check AI tools** in Settings. Only the selected provider is installed. Downloads use pinned manifests and integrity checks; completed tools are cached for reuse.
+### 2. Connect Chrome
 
-The build scripts use local ad-hoc signing. These builds are not notarized public macOS releases.
+1. In Cue Settings, open **Connect Chrome** and prepare the extension.
+2. Open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**.
+3. Select the persistent folder Cue reveals, then enter its extension ID in Cue.
 
-## Privacy and limitations
+Use the persistent folder, not the copy on the mounted disk image. Install or reload only outside a call. Chrome Web Store installation is not provided.
 
-Audio, transcripts, and browser queues stay on your machine. Enabling AI sends call text and explicitly attached context to the selected provider. Model and tool downloads contact their upstream hosts. Calendar titles and times are not included in AI prompts.
+### 3. Let the local model get ready
 
-The localhost bridge trusts local programs; it checks browser extension origins but does not authenticate other local processes. Keep this in mind before using Cue for sensitive conversations. Follow applicable recording and participant-consent requirements.
+Cue downloads its speech model on first launch—approximately **824 MB**—then prepares it for your Mac. Settings shows model status and provides a retry button.
 
-Captions, transcription, summaries, refinement, and speaker attribution can be wrong. Meet changes can break capture. Coaching can be visible during full-screen sharing. Synthetic tests do not establish real-call accuracy or reliability across every device.
+Codex and Claude tools download independently when first used, or through **Download / check AI tools**. Only the selected provider is installed. Downloads are integrity-checked and cached outside the app; they are not bundled into the installer. AI features require a separately configured provider account.
 
-See [setup](docs/setup.md), [architecture](docs/architecture.md), and [security](SECURITY.md).
+For troubleshooting, cache locations, and optional checks, see the [setup guide](docs/setup.md).
 
-## Development
+## What stays local?
+
+| Data or operation | Where it goes |
+| --- | --- |
+| Audio recording and transcription | Your Mac |
+| Saved calls, transcripts, and browser offline queue | Local app/browser storage |
+| Optional AI summaries and coaching | Call text and explicitly attached context go to your selected provider |
+| Speech-model and provider-tool downloads | Their upstream download hosts |
+| Calendar matching | Local EventKit access; calendar titles and times are not added to AI prompts |
+
+The app’s bridge binds to `127.0.0.1:17373`. It checks the configured browser extension’s exact origin and trusts other local programs without authentication. Review the [security model](SECURITY.md) before using sensitive conversations or attaching project context. Follow applicable recording and participant-consent requirements.
+
+## Know the limits
+
+- Captions, transcripts, speaker attribution, and AI output can be wrong. Review important details against original sources.
+- Meet changes can break capture; synthetic checks do not prove reliability across every real call or device.
+- The coaching panel may appear during full-screen sharing.
+- Initial downloads require internet access. Optional AI features depend on the selected provider’s account and service.
+
+## Develop with Cue
+
+Run the canvas, extension, packaging, native tests, and dependency audit:
 
 ```sh
 scripts/verify-native.sh
 ```
 
-This builds and tests the canvas, extension, packaging, and native app. Private audio fixtures and signed-in provider tests are opt-in; defaults do not require real call data. Use disposable browser profiles for browser integration tests.
+Real audio fixtures and signed-in provider checks are opt-in. Use disposable browser profiles for integration tests. Keep recordings, databases, transcripts, credentials, and private screenshots outside Git.
 
-The native CLI supports local call access:
+With Cue running, inspect local calls through the CLI:
 
 ```sh
 node scripts/cue.mjs status
@@ -61,8 +119,8 @@ node scripts/cue.mjs list
 node scripts/cue.mjs read --session SESSION_ID --after 0
 ```
 
-Keep private databases, recordings, provider credentials, and transcripts outside this repository. See [contributing](CONTRIBUTING.md).
+See [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md), and [screenshot reproduction](docs/screenshots/README.md).
 
 ## License
 
-Cue's original code is MIT licensed. Adapted capture/protocol code retains its Apache-2.0 licensing and attribution; see [NOTICE](NOTICE) and `docs/licenses/`. Downloaded dependencies and model weights retain their respective upstream licenses.
+Cue’s original code is [MIT licensed](LICENSE). Adapted capture/protocol code retains its Apache-2.0 licensing and attribution; see [NOTICE](NOTICE) and `docs/licenses/`. Downloaded dependencies and model weights retain their upstream licenses.
