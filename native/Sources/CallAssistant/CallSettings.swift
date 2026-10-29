@@ -5,7 +5,7 @@ struct CallSettings:View {
     @ObservedObject private var runtime=AgentRuntime.shared
     @Environment(\.dismiss) private var dismiss
     @State private var extensionSetup=false
-    @State private var section="assistant"
+    @State private var section="setup"
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
             HStack(alignment:.top) {
@@ -14,12 +14,15 @@ struct CallSettings:View {
                 Button("Done") {dismiss()}.keyboardShortcut(.defaultAction).modifier(CallActionStyle())
             }.padding(24)
             Picker("Settings category",selection:$section) {
+                Text("Setup").tag("setup")
                 Text("Assistant").tag("assistant")
                 Text("Connections").tag("connections")
             }.pickerStyle(.segmented).labelsHidden().padding(.horizontal,24).padding(.bottom,20)
             Divider()
             Form {
-                if section=="assistant" {
+                if section=="setup" {
+                    SetupChecklist(model:model,onConnectChrome:{extensionSetup=true})
+                } else if section=="assistant" {
                     Section("Intelligence") {
                         Picker("AI provider",selection:$model.aiProvider) {
                             ForEach(AIProvider.allCases,id:\.self){Text($0.title).tag($0)}
@@ -34,7 +37,7 @@ struct CallSettings:View {
                                 Task {do {_ = try await runtime.prepare(provider)} catch { /* Status shows the retryable error. */ }}
                             }
                         }
-                        Toggle("Summarize completed calls automatically",isOn:$model.automaticSummaries)
+                        Toggle("Summarize completed calls automatically",isOn:$model.automaticSummaries).disabled(!model.aiConsentGranted)
                         Text("Call text and attached context are shared with this provider for summaries and coaching. Audio stays on this Mac.")
                             .font(.caption).foregroundStyle(CallPalette.muted)
                     }
@@ -76,6 +79,7 @@ struct CallSettings:View {
                 }
             }.formStyle(.grouped).scrollContentBackground(.hidden)
         }.frame(width:580,height:620).background(CallPalette.canvas).tint(CallPalette.accent)
+            .onAppear {runtime.refresh()}
             .modifier(CallActivationClicks()).sheet(isPresented:$extensionSetup) {ExtensionSetup(model:model)}
     }
 }

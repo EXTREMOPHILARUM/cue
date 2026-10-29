@@ -214,6 +214,20 @@ test('decoder stall deadline follows oldest outstanding packet and recovers with
  await f.native();await f.finish();assert.ok(f.audioFrames().some(x=>x.captureMethod==='track-processor' && x.captureDiscontinuities?.[0].reason==='decoder-stalled'));
 });
 
+test('microsecond rounding in real decoder timestamps retires packets without false stalls or lost identity',async()=>{
+ for(const rounding of [-1,1]){
+  const f=await decoderFixture();
+  for(let i=0;i<16;i++){
+   await f.send();f.decoders[0].output(i===0?0:i*20000+rounding);
+  }
+  assert.equal(f.timers.size,0,'Completed packets must not retain the stall watchdog');
+  await f.finish();
+  assert.equal(f.audioFrames().reduce((n,x)=>n+Buffer.from(x.pcm,'base64').length/4,0),16*320);
+  assert.ok(f.audioFrames().every(x=>x.mappingHistory.every(e=>e.reason!=='decoder-metadata-miss')));
+  assert.equal(f.events.filter(e=>e.event==='warning').length,0);
+ }
+});
+
 test('variable Opus durations and split outputs retain packet identity until its final output',async()=>{
  const f=await decoderFixture();
  // 10 ms, 40 ms, 60 ms, 2.5 ms and a two-frame 20 ms packet.
@@ -269,4 +283,24 @@ test('unexpected decoder timestamps preserve audio as Unknown, while malformed O
  assert.equal(f.forwarded[0],original);assert.equal(f.forwarded.length,2);
  assert.ok(f.audioFrames().some(x=>x.speaker==='Unknown' && x.mappingHistory.some(e=>e.reason==='decoder-metadata-miss')));
  assert.ok(f.audioFrames().some(x=>x.captureDiscontinuities?.some(g=>g.reason==='invalid-opus-duration')));
+});
+
+test('audio content bridge stays disabled before consent and honors app pause and revocation',async()=>{
+ const state={},controls=[],storageListeners=[],runtimeListeners=[],listeners={},messages=[];
+ const window={postMessage:message=>controls.push(message),addEventListener:(type,fn)=>listeners[type]=fn};
+ const chrome={storage:{local:{get:(keys,callback)=>callback({...state})},onChanged:{addListener:fn=>storageListeners.push(fn)}},runtime:{onMessage:{addListener:fn=>runtimeListeners.push(fn)},sendMessage:async message=>{messages.push(message);return {};}}};
+ const document={getElementById:()=>null,createElement:()=>({style:{}}),body:{append(){}}};
+ const context=vm.createContext({window,document,chrome,location:{origin:'https://meet.google.com'},Promise});
+ vm.runInContext(await readFile(new URL('../call-media-content.js',import.meta.url),'utf8'),context);
+ const update=values=>{Object.assign(state,values);storageListeners[0](Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{newValue:value}])),'local');};
+ assert.equal(controls.at(-1).enabled,false);
+ update({auto_capture_enabled:true});assert.equal(controls.at(-1).enabled,false);
+ listeners.message({source:window,origin:'https://meet.google.com',data:{source:'call-assistant-media',event:'start',presenceConfirmed:true}});
+ await new Promise(setImmediate);assert.equal(messages.length,1);
+ update({capture_consent_granted:true,desktop_capture_paused:false});assert.equal(controls.at(-1).enabled,true);
+ await new Promise(setImmediate);assert.equal(messages.length,2);assert.equal(messages[1].event,'start');
+ runtimeListeners[0]({type:'NATIVE_CAPTURE_PAUSE'});assert.equal(controls.at(-1).enabled,false);
+ update({capture_consent_granted:true});assert.equal(controls.at(-1).enabled,false);
+ runtimeListeners[0]({type:'NATIVE_CAPTURE_RESUME'});assert.equal(controls.at(-1).enabled,true);
+ update({capture_consent_granted:false});assert.equal(controls.at(-1).enabled,false);
 });

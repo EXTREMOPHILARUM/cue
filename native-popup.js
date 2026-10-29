@@ -9,7 +9,7 @@ async function refreshNative() {
   try {
     const state = await nativeCommand('NATIVE_STATUS');
     nativeStatus.classList.toggle('offline',!state.connected);
-    nativeStatus.textContent = state.error || (state.capturing ? 'Capturing remote audio locally' : state.connected
+    nativeStatus.textContent = state.permissionRequired ? 'Setup needed · allow recording in Cue → Settings → Setup' : state.capturePaused ? 'Capture paused in Cue' : state.error || (state.capturing ? 'Capturing remote audio locally' : state.connected
       ? `Desktop connected${automaticCapture ? ' · ' + (state.pending || 0) + ' waiting to sync' : ' · no audio capture'}`
       : automaticCapture ? 'Desktop app offline · saving in Chrome' : 'Desktop app unavailable');
   } catch (error) { nativeStatus.classList.add('offline'); nativeStatus.textContent = error.message; }

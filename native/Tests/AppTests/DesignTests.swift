@@ -8,7 +8,7 @@ final class DesignTests:XCTestCase {
         _ = NSApplication.shared
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {try? FileManager.default.removeItem(at:folder)}
-        let model=try AppModel(directory:folder,port:17418)
+        let model=try AppModel(directory:folder,port:17418);model.setCaptureConsent(true);model.setAIConsent(true)
         defer {model.server.stop()}
         let time=Date().timeIntervalSince1970*1000
         try model.store.snapshot(id:"design-call",record:["id":"design-room","title":"Product design review","started_at":time,"ended_at":time+1000,"participants":["Alex","Morgan"],"captions":[
@@ -47,7 +47,7 @@ final class DesignTests:XCTestCase {
         guard ProcessInfo.processInfo.environment["CUE_README_SCREENSHOTS"] != nil else {throw XCTSkip("Opt in to native documentation screenshots")}
         _ = NSApplication.shared
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let model=try AppModel(directory:folder,port:17419)
+        let model=try AppModel(directory:folder,port:17419);model.setCaptureConsent(true);model.setAIConsent(true)
         defer {model.server.stop();try? FileManager.default.removeItem(at:folder)}
         let time=1793176200000.0
         let turns:[(String,String)]=[

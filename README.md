@@ -70,7 +70,7 @@ Open the disk image under `build/`, drag **Cue** into **Applications**, and laun
 
 ### 2. Connect Chrome
 
-1. In Cue Settings, open **Connect Chrome** and prepare the extension.
+1. Review recording permission in **Settings → Setup**, then open **Connect Chrome** and prepare the extension. New installs use **Home → Cue Extension** (`~/Cue Extension`).
 2. Open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**.
 3. Select the persistent folder Cue reveals, then enter its extension ID in Cue.
 
@@ -78,9 +78,9 @@ Use the persistent folder, not the copy on the mounted disk image. Install or re
 
 ### 3. Let the local model get ready
 
-Cue downloads its speech model on first launch—approximately **824 MB**—then prepares it for your Mac. Settings shows model status and provides a retry button.
+The first-run **Setup** checklist checks for an existing speech model. Cached files are reused; choose **Download speech model** only when missing (approximately **824 MB**). The model is prepared locally for your Mac, with status and retry controls in Settings.
 
-Codex and Claude tools download independently when first used, or through **Download / check AI tools**. Only the selected provider is installed. Downloads are integrity-checked and cached outside the app; they are not bundled into the installer. AI features require a separately configured provider account.
+Setup checks for existing Codex/Claude ACP tools and offers downloads only for missing tools of the selected provider. Optional AI processing requires separate consent. Downloads are integrity-checked and cached outside the app; they are not bundled into the installer. AI features require a separately configured provider account.
 
 For troubleshooting, cache locations, and optional checks, see the [setup guide](docs/setup.md).
 

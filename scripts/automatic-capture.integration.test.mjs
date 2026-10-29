@@ -67,11 +67,11 @@ test('isolated Chromium: real WebRTC media capture and usable capture popup', {t
     await evaluate('run()');
     console.info('Isolated RTC fixture connected');
     let stats;const began=Date.now();
-    const readStats=()=>evaluate('({state:a.connectionState,frames:mediaEvents.filter(e=>e.event==="audio").map(e=>e.summary),errors:mediaEvents.filter(e=>e.event==="error"),original:track.readyState})');
+    const readStats=()=>evaluate('({state:a.connectionState,frames:mediaEvents.filter(e=>e.event==="audio").map(e=>e.summary),errors:mediaEvents.filter(e=>e.event==="error"),warnings:mediaEvents.filter(e=>e.event==="warning"),original:track.readyState})');
     for(let i=0;i<220;i++){stats=await readStats();if(speech ? Date.now()-began>=16500 : stats.frames.filter(f=>f.source==='remote').length>=2 && stats.frames.filter(f=>f.source==='local').length>=2)break;await delay(100);}
     if(speech){await evaluate('window.postMessage({source:"call-assistant-control",enabled:false},location.origin);true');await delay(200);stats=await readStats();}
     console.info('Capture methods:',[...new Set(stats.frames.map(f=>f.method))]);
-    if(encodedTest)assert.ok(stats.frames.some(f=>f.method==='encoded-opus'),JSON.stringify(stats));
+    if(encodedTest){assert.ok(stats.frames.some(f=>f.method==='encoded-opus'),JSON.stringify(stats));assert.deepEqual(stats.warnings.filter(w=>w.message.includes('decoder-stalled')),[],'A progressing real Opus decoder must not falsely stall');}
     assert.equal(stats.state,'connected');assert.ok(stats.frames.some(f=>f.source==='remote'),JSON.stringify(stats));assert.ok(stats.frames.some(f=>f.source==='local'),JSON.stringify(stats));for(const track of new Set(stats.frames.map(f=>f.trackID)))assert.ok(stats.frames.some(f=>f.trackID===track && f.rms>(speech?.005:.05)),JSON.stringify(stats));assert.equal(stats.original,'live');assert.deepEqual(stats.errors,[]);
     if(speech){const frames=[];for(let i=0;i<stats.frames.length;i++)frames.push(await evaluate(`mediaEvents.filter(e=>e.event==="audio")[${i}].frame`));await writeFile(speech,JSON.stringify(frames));}
     else for(const source of ['local','remote'])for(const frequency of [440,880])assert.ok(stats.frames.some(f=>f.source===source && Math.abs(f.frequency-frequency)<20),JSON.stringify(stats));

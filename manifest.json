@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cue",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Captures Google Meet captions and opt-in audio for the local Cue app.",
   "permissions": [
     "storage",

@@ -4,11 +4,20 @@ import CallCore
 
 actor Transcriber {
     static let modelName="vocahq_voca-hinglish_820MB"
+    static func modelFolder(support:URL?=nil) -> URL {
+        (support ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0])
+            .appendingPathComponent("Cue/models/VocaHQ/whisperkit-coreml/"+modelName)
+    }
+    static func downloaded(at folder:URL) -> Bool {
+        ["AudioEncoder.mlmodelc","MelSpectrogram.mlmodelc","TextDecoder.mlmodelc","config.json"].allSatisfy {
+            FileManager.default.fileExists(atPath:folder.appendingPathComponent($0).path)
+        }
+    }
     private var kit: WhisperKit?
     func load() async throws {
         if kit == nil {
             let base=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Cue")
-            let folder=base.appendingPathComponent("models/VocaHQ/whisperkit-coreml/"+Self.modelName)
+            let folder=Self.modelFolder()
             kit=try await WhisperKit(WhisperKitConfig(model:Self.modelName,downloadBase:base,modelRepo:"VocaHQ/whisperkit-coreml",modelFolder:FileManager.default.fileExists(atPath:folder.path) ? folder.path:nil,verbose:false,load:true))
         }
     }

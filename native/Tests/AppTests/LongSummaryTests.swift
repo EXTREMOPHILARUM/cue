@@ -84,7 +84,7 @@ import CallCore
     }
     func testLongSummaryIsSavedOnlyAfterAllPartsSucceed() async throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let model=try AppModel(directory:root,port:0)
+        let model=try AppModel(directory:root,port:0);model.setCaptureConsent(true);model.setAIConsent(true)
         defer {model.stopAI();model.server.stop();try? FileManager.default.removeItem(at:root)}
         let captions=transcript(12).map{["speaker":"Sam","text":$0["text"]!,"t":$0["t"]!]}
         try model.store.snapshot(id:"long",record:["id":"long","ended_at":2,"captions":captions])

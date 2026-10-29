@@ -7,9 +7,16 @@ import CallCore
     static let shared=AgentRuntime()
     @Published private(set) var status:[AIProvider:String]=[:]
     @Published private(set) var downloading:Set<AIProvider>=[]
+    @Published private(set) var installed:Set<AIProvider>=[]
     private var tasks:[AIProvider:Task<URL,Error>]=[:]
     private let install:(AIProvider,@escaping @Sendable (String) async -> Void) async throws -> URL
     init(install:@escaping (AIProvider,@escaping @Sendable (String) async -> Void) async throws -> URL = RuntimeDownload.prepare) {self.install=install}
+    func refresh() {
+        for provider in AIProvider.allCases where !downloading.contains(provider) {
+            if RuntimeDownload.cachedRoot(provider) != nil {installed.insert(provider);status[provider]="Already installed on this Mac"}
+            else {installed.remove(provider);if status[provider]?.hasPrefix("Download failed:") != true {status[provider]="Not downloaded"}}
+        }
+    }
     func prepare(_ provider:AIProvider) async throws -> URL {
         if let task=tasks[provider] {return try await task.value}
         downloading.insert(provider)
@@ -19,6 +26,7 @@ import CallCore
         do {
             let root=try await task.value
             status[provider]="Ready on this Mac"
+            installed.insert(provider)
             return root
         } catch {
             status[provider]="Download failed: \(error.localizedDescription). Try again."
@@ -46,12 +54,20 @@ enum RuntimeDownload {
     static func ready(_ provider:AIProvider,at root:URL) -> Bool {
         FileManager.default.isExecutableFile(atPath:root.appendingPathComponent("node-runtime/bin/node").path) && FileManager.default.fileExists(atPath:script(provider,in:root).path) && FileManager.default.fileExists(atPath:root.appendingPathComponent("ready").path)
     }
-    static func prepare(_ provider:AIProvider,progress:@escaping @Sendable (String) async -> Void) async throws -> URL {
+    static func destination(_ provider:AIProvider,support:URL?=nil) throws -> URL {
         guard let manifests=Bundle.module.url(forResource:"AgentDependencies",withExtension:nil)?.appendingPathComponent(provider.rawValue) else {throw BridgeError("AI download manifest is missing")}
         let lock=try Data(contentsOf:manifests.appendingPathComponent("package-lock.json"))
         let key="node-\(nodeVersion)-\(architecture)-"+digest(lock)
-        let support=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
-        let destination=support.appendingPathComponent("Cue/AgentRuntimes/\(provider.rawValue)/\(key)",isDirectory:true)
+        let base=support ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
+        return base.appendingPathComponent("Cue/AgentRuntimes/\(provider.rawValue)/\(key)",isDirectory:true)
+    }
+    static func cachedRoot(_ provider:AIProvider,support:URL?=nil) -> URL? {
+        guard let root=try? destination(provider,support:support),ready(provider,at:root) else {return nil}
+        return root
+    }
+    static func prepare(_ provider:AIProvider,progress:@escaping @Sendable (String) async -> Void) async throws -> URL {
+        guard let manifests=Bundle.module.url(forResource:"AgentDependencies",withExtension:nil)?.appendingPathComponent(provider.rawValue) else {throw BridgeError("AI download manifest is missing")}
+        let destination=try destination(provider)
         if ready(provider,at:destination) {return destination}
         await progress("Downloading Node.js for \(provider.title)…")
         let config=URLSessionConfiguration.ephemeral

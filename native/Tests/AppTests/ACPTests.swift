@@ -7,6 +7,17 @@ final class ACPTests:XCTestCase {
         let paths=(ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator:":").map{String($0)+"/node"}
         return URL(fileURLWithPath:try XCTUnwrap(paths.first{FileManager.default.isExecutableFile(atPath:$0)},"Development checks require Node.js on PATH"))
     }
+    private func simulateBusyUI() {Thread.sleep(forTimeInterval:0.25)}
+    @MainActor func testValidMessageBurstWaitsForBusyUIWithoutDroppingTransportData() async throws {
+        let node=try nodeExecutable()
+        let script="const note=JSON.stringify({jsonrpc:'2.0',method:'session/update',params:{sessionId:'old',padding:'x'.repeat(900)}})+'\\n';process.stdout.write(note.repeat(5000));process.stdin.once('data',data=>{const q=JSON.parse(data);process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:q.id,result:{protocolVersion:1}})+'\\n');});"
+        let connection=try ACPConnection(executable:node,arguments:["-e",script],environment:[:],directory:FileManager.default.temporaryDirectory)
+        defer {connection.close()}
+        simulateBusyUI()
+        let result=try await connection.request("initialize",params:[:],timeout:5)
+        XCTAssertEqual(result["protocolVersion"] as? Int,1)
+        XCTAssertTrue(connection.isRunning)
+    }
 
     @MainActor func testStalledInputDoesNotBlockTimeoutOrMainActor() async throws {
         let connection=try ACPConnection(executable:URL(fileURLWithPath:"/bin/sleep"),arguments:["10"],environment:[:],directory:FileManager.default.temporaryDirectory)
@@ -25,6 +36,14 @@ final class ACPTests:XCTestCase {
         defer {connection.close()}
         do {_ = try await connection.request("initialize",params:[:],timeout:2);XCTFail("Output flood accepted")}
         catch {XCTAssertTrue(error.localizedDescription.contains("output exceeded limit"),error.localizedDescription)}
+    }
+    @MainActor func testProviderLimitErrorIsShownWithoutDiscardingItsCause() async throws {
+        let node=try nodeExecutable()
+        let script="process.stdin.once('data',data=>{const q=JSON.parse(data);process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:q.id,error:{code:-32000,message:'Provider context limit reached'}})+'\\n');});"
+        let connection=try ACPConnection(executable:node,arguments:["-e",script],environment:[:],directory:FileManager.default.temporaryDirectory)
+        defer {connection.close()}
+        do {_ = try await connection.request("initialize",params:[:],timeout:2);XCTFail("Provider error accepted")}
+        catch {XCTAssertTrue(error.localizedDescription.contains("Provider context limit reached"),error.localizedDescription)}
     }
     @MainActor func testStalledInputCanBeCancelled() async throws {
         let connection=try ACPConnection(executable:URL(fileURLWithPath:"/bin/sleep"),arguments:["10"],environment:[:],directory:FileManager.default.temporaryDirectory)

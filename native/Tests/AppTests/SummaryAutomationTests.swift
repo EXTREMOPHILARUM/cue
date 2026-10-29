@@ -5,7 +5,9 @@ import CallCore
 @MainActor final class SummaryAutomationTests:XCTestCase {
     private func model() throws -> (AppModel,URL) {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        return (try AppModel(directory:root,port:0),root)
+        let model=try AppModel(directory:root,port:0)
+        model.setCaptureConsent(true);model.setAIConsent(true)
+        return (model,root)
     }
     private func wait(_ model:AppModel) async throws {
         for _ in 0..<100 {

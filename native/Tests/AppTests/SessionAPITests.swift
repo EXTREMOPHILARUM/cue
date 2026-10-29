@@ -6,7 +6,7 @@ final class SessionAPITests: XCTestCase {
     @MainActor func testCoachingSelectionPersistenceAndRoles() async throws {
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }
-        let model=try AppModel(directory:folder,port:17375)
+        let model=try AppModel(directory:folder,port:17375);model.setCaptureConsent(true);model.setAIConsent(true)
         defer { model.server.stop() }
         let snapshot: [String:Any] = ["method":"snapshot","peer":"test-peer","session":"one","record":["id":"abc-defg-hij","captions":[["speaker":"Sam","text":"Pilot","t":1]]]]
         _ = try await model.request(role:"extension",request:snapshot)
@@ -36,7 +36,7 @@ extension SessionAPITests {
         guard let path=ProcessInfo.processInfo.environment["CALL_ASSISTANT_AUDIO_FIXTURE"] else { throw XCTSkip("Set CALL_ASSISTANT_AUDIO_FIXTURE for streaming inference test") }
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }
-        let model=try AppModel(directory:folder,port:17377)
+        let model=try AppModel(directory:folder,port:17377);model.setCaptureConsent(true);model.setAIConsent(true)
         defer { model.server.stop() }
         _ = try await model.request(role:"extension",request:["method":"snapshot","session":"audio-test","peer":"fixture","record":["id":"abc-defg-hij"]])
         model.loadModel()
@@ -70,7 +70,7 @@ extension SessionAPITests {
         guard let path=ProcessInfo.processInfo.environment["CALL_ASSISTANT_AUDIO_FIXTURE"] else { throw XCTSkip("Set CALL_ASSISTANT_AUDIO_FIXTURE for archive inference test") }
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }
-        let model=try AppModel(directory:folder,port:17379)
+        let model=try AppModel(directory:folder,port:17379);model.setCaptureConsent(true);model.setAIConsent(true)
         defer { model.server.stop() }
         _ = try await model.request(role:"extension",request:["method":"snapshot","session":"archive-test","peer":"fixture","record":["id":"abc-defg-hij","captions":[["text":"Meet supplied caption","speaker":"Sam","t":1]]]])
         let samples=try AudioProcessor.loadAudioAsFloatArray(fromPath:path)

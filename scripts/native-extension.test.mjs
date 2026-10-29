@@ -16,11 +16,11 @@ test('automatic bridge retains offline audio, reconnects without tab selection a
     const message=JSON.parse(data);received.push(message);
     if(message.method==='snapshot')sessions.add(message.session);
     const valid=message.method!=='ingest-audio' || sessions.has(message.session);
-    socket.send(JSON.stringify({id:message.id,ok:valid,result:{stored:true},error:'Missing session'}));
+    socket.send(JSON.stringify({id:message.id,ok:valid,result:message.method==='status'?{captureConsentGranted:true,paused:false}:{stored:true},error:'Missing session'}));
   }));
   class Socket extends WebSocket {constructor(){super(`ws://127.0.0.1:${online?server.address().port:9}`);}}
-  const records=new Map(),sessionStorage={};
-  const chrome={runtime:{id:'fixture',getURL:x=>`chrome-extension://fixture/${x}`,onMessage:{addListener:fn=>listener=fn}},storage:{local:{get:async()=>({})},session:{get:async key=>({[key]:sessionStorage[key]}),set:async data=>Object.assign(sessionStorage,data)},onChanged:{addListener(){}}},action:{setBadgeText:async()=>{},setBadgeBackgroundColor:async()=>{},setTitle:async()=>{}},tabs:{query:async()=>[],onRemoved:{addListener(){}}},alarms:{create(){},onAlarm:{addListener(){}}}};
+  const records=new Map(),sessionStorage={},localStorage={capture_consent_granted:true};
+  const chrome={runtime:{id:'fixture',getURL:x=>`chrome-extension://fixture/${x}`,onMessage:{addListener:fn=>listener=fn}},storage:{local:{get:async key=>typeof key==='string'?{[key]:localStorage[key]}:{...localStorage},set:async value=>Object.assign(localStorage,value)},session:{get:async key=>({[key]:sessionStorage[key]}),set:async data=>Object.assign(sessionStorage,data)},onChanged:{addListener(){}}},action:{setBadgeText:async()=>{},setBadgeBackgroundColor:async()=>{},setTitle:async()=>{}},tabs:{query:async()=>[],onRemoved:{addListener(){}}},alarms:{create(){},onAlarm:{addListener(){}}}};
   const context=vm.createContext({indexedDB:new IDBFactory(),crypto,Date,Promise,WebSocket:Socket,URL,console,chrome,setInterval,clearInterval,setTimeout:(fn,ms)=>ms===500?0:setTimeout(fn,ms),clearTimeout,
     withCallLock:async(key,operation)=>operation(),migrateHistoricalCalls:async()=>{},getIndex:async()=>[...records.keys()],getCall:async id=>records.get(id),putCall:async record=>records.set(record.id,record),ensureCall:async(id,meta)=>{const record={id,...meta,captions:[],notes:[]};records.set(id,record);return record;},updateMeta:async()=>{}});
   context.importScripts=()=>{};

@@ -10,13 +10,13 @@ final class CoachingLoopTests:XCTestCase {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {preferences.removePersistentDomain(forName:suite);try? FileManager.default.removeItem(at:root)}
         let system=NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
-        let first=try AppModel(directory:root,port:17428,preferences:preferences)
+        let first=try AppModel(directory:root,port:17428,preferences:preferences);first.setCaptureConsent(true);first.setAIConsent(true)
         defer {first.server.stop()}
         XCTAssertFalse(first.coachingTransparencyOverride)
         first.coachingTransparencyOverride=true
         first.coachingBackdropOpacity=0.45
         XCTAssertTrue(preferences.bool(forKey:"coachingTransparencyOverride"))
-        let reopened=try AppModel(directory:root,port:17429,preferences:preferences)
+        let reopened=try AppModel(directory:root,port:17429,preferences:preferences);reopened.setCaptureConsent(true);reopened.setAIConsent(true)
         defer {reopened.server.stop()}
         XCTAssertTrue(reopened.coachingTransparencyOverride)
         XCTAssertEqual(reopened.coachingBackdropOpacity,0.45)
@@ -32,7 +32,7 @@ final class CoachingLoopTests:XCTestCase {
         _ = NSApplication.shared
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17423);defer {model.server.stop();model.panel?.hide()}
+        let model=try AppModel(directory:root,port:17423);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.panel?.hide()}
         model.attachPanel();let panel=try XCTUnwrap(model.panel)
         let backdrop=try XCTUnwrap(panel.web.superview?.subviews.compactMap{$0 as? NSVisualEffectView}.first)
         XCTAssertFalse(panel.web.superview is NSVisualEffectView)
@@ -79,7 +79,7 @@ final class CoachingLoopTests:XCTestCase {
         try FileManager.default.createDirectory(at:file.deletingLastPathComponent(),withIntermediateDirectories:true)
         defer {try? FileManager.default.removeItem(at:root)}
         try "Ask one relevant follow-up.".write(to:file,atomically:true,encoding:.utf8)
-        let model=try AppModel(directory:root,port:17424);defer {model.server.stop()}
+        let model=try AppModel(directory:root,port:17424);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop()}
         try model.store.snapshot(id:"first",record:["id":"first","series_id":"weekly"])
         model.select("first")
         try model.saveAIProject(AIProject(path:root.path,skill:skill),for:"first",shareProject:true)
@@ -91,7 +91,7 @@ final class CoachingLoopTests:XCTestCase {
     @MainActor func testPausingCoachingDoesNotPauseCaptureOrLoseTheCall() async throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17425);defer {model.stopAI();model.server.stop()}
+        let model=try AppModel(directory:root,port:17425);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.stopAI();model.server.stop()}
         try model.store.snapshot(id:"live",record:["id":"abc-defg-hij","captions":[["text":"Pilot","t":1]]]);model.select("live")
         var requests=0
         model.aiGenerate={_,_,_,_ in requests += 1;try await Task.sleep(nanoseconds:10_000_000_000);throw CancellationError()}
@@ -164,7 +164,7 @@ final class CoachingLoopTests:XCTestCase {
     @MainActor func testCoveredAdviceRetiresWithoutRequiringReplacement() async throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17422);defer {model.stopAI();model.server.stop()}
+        let model=try AppModel(directory:root,port:17422);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.stopAI();model.server.stop()}
         try model.store.snapshot(id:"live",record:["id":"abc-defg-hij","captions":[["text":"The question is answered","speaker":"You","t":1]]])
         model.select("live")
         _ = try await model.request(role:"assistant",request:["method":"coach","session":"live","program":"root = Canvas(Coach(\"Old\",\"Ask again?\",[],\"\"),[])","fallback":"Old"])

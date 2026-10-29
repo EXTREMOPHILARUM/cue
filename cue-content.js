@@ -5,6 +5,10 @@
 // 3. Continuously scrape Meet captions/participants and push to background.
 
 (function () {
+  let captureAllowed=false;
+  function refreshPermission(){chrome.storage.local.get(['capture_consent_granted','desktop_capture_paused'],value=>{captureAllowed=value.capture_consent_granted===true && value.desktop_capture_paused!==true;});}
+  refreshPermission();
+  chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local' && (changes.capture_consent_granted || changes.desktop_capture_paused))refreshPermission();});
   const MEET_CODE_RE = /^\/(?:meet\/)?([a-z]{3}-[a-z]{4}-[a-z]{3})(?:\/|$)/;
 
   function currentMeetingId() {
@@ -199,7 +203,7 @@
 
   // Call existence + metadata only. Captions are handled by the observer.
   function metaTick() {
-    if (extensionContextDead) return;
+    if (extensionContextDead || !captureAllowed) return;
     const id = currentMeetingId();
     if (!id || !inMeeting()) return;
 
@@ -261,7 +265,7 @@
 
   function flushPending() {
     flushTimer = null;
-    if (extensionContextDead || !pending.size) return;
+    if (extensionContextDead || !captureAllowed || !pending.size) {pending.clear();return;}
     const id = currentMeetingId();
     if (!id) { pending.clear(); return; }
     const captions = [...pending.values()];
@@ -273,7 +277,7 @@
   // last emitted for that node. Cheap: only runs after a mutation, and only
   // over the handful of blocks Meet keeps in the DOM.
   function reconcileCaptions() {
-    if (extensionContextDead || !inMeeting()) return;
+    if (extensionContextDead || !captureAllowed || !inMeeting()) return;
     for (const node of document.querySelectorAll('div.nMcdL')) {
       const parsed = parseBlock(node);
       if (!parsed) continue;
@@ -419,6 +423,7 @@
   let captionsEnabledByUs = false;
   let buttonAttempts = 0;
   function maybeEnableCaptions() {
+    if(!captureAllowed)return;
     if (extensionContextDead || !inMeeting()) return;
     // Keep the caption observer bound to the current panel (cheap no-op once
     // attached; re-binds if Meet rebuilds the container).

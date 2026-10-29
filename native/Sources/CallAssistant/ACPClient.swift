@@ -119,16 +119,23 @@ import Darwin
         guard fcntl(input.fileHandleForWriting.fileDescriptor,F_SETNOSIGPIPE,1) != -1 else {throw BridgeError("Cannot configure ACP pipe")}
         // Drain diagnostics without retaining transcript or credential-bearing provider logs.
         errors.fileHandleForReading.readabilityHandler={handle in _ = handle.availableData}
-        let (stream,continuation)=AsyncStream<Data>.makeStream(bufferingPolicy:.bufferingOldest(32))
+        let (stream,continuation)=AsyncStream<Data>.makeStream(bufferingPolicy:.bufferingOldest(1))
+        let consumed=DispatchSemaphore(value:0)
+        continuation.onTermination={_ in consumed.signal()}
         let handle=output.fileHandleForReading
         DispatchQueue(label:"cue.acp.read").async { [weak self] in
             defer {continuation.finish()}
             while true {
                 let data=handle.availableData
                 if data.isEmpty {break}
-                if case .dropped = continuation.yield(data) {
-                    Task { @MainActor [weak self] in self?.fail(BridgeError("ACP output exceeded limit")) }
-                    break
+                // Backpressure the pipe while the UI is busy instead of dropping valid protocol bytes.
+                switch continuation.yield(data) {
+                case .enqueued:consumed.wait()
+                case .terminated:return
+                case .dropped:
+                    Task { @MainActor [weak self] in self?.fail(BridgeError("ACP output queue exceeded limit")) }
+                    return
+                @unknown default:return
                 }
             }
         }
@@ -140,15 +147,19 @@ import Darwin
         // The parent must close its copies so EOF follows an agent exit.
         try? output.fileHandleForWriting.close();try? errors.fileHandleForWriting.close()
         reader=Task { [weak self] in
+            defer {continuation.finish();consumed.signal()}
             var buffer=Data()
             for await chunk in stream {
+                defer {consumed.signal()}
                 guard let self,!self.closed else {break}
                 buffer.append(chunk)
-                guard buffer.count<=2_000_000 else {self.fail(BridgeError("ACP output exceeded limit"));return}
                 while let newline=buffer.firstIndex(of:10) {
+                    guard buffer.distance(from:buffer.startIndex,to:newline)<=2_000_000 else {self.fail(BridgeError("ACP output exceeded limit: single message larger than 2 MB"));return}
                     let line=Data(buffer[..<newline]);buffer.removeSubrange(...newline)
                     if !line.isEmpty {self.receive(line)}
+                    guard !self.closed else {return}
                 }
+                guard buffer.count<=2_000_000 else {self.fail(BridgeError("ACP output exceeded limit: unfinished message larger than 2 MB"));return}
             }
             self?.fail(BridgeError("ACP agent disconnected; restart coaching to reconnect"))
         }
@@ -180,6 +191,7 @@ import Darwin
         }
     }
     private func receive(_ data:Data) {
+        guard !closed else {return}
         do {
             guard let message=try JSONSerialization.jsonObject(with:data) as? [String:Any],message["jsonrpc"] as? String == "2.0" else {throw BridgeError("Invalid ACP response")}
             if let method=message["method"] as? String {
@@ -205,7 +217,8 @@ import Darwin
                 timers.removeValue(forKey:id)?.cancel()
                 if let error=message["error"] as? [String:Any] {
                     let code=error["code"] as? Int ?? 0
-                    continuation.resume(throwing:BridgeError("ACP request failed (\(code)); check the provider sign-in and usage limits"))
+                    let detail=String((error["message"] as? String ?? "Check provider sign-in and usage limits").prefix(500))
+                    continuation.resume(throwing:BridgeError("ACP request failed (\(code)): \(detail)"))
                 } else if let result=message["result"] as? [String:Any] {continuation.resume(returning:result)}
                 else {continuation.resume(throwing:BridgeError("ACP response is missing its result"))}
             }

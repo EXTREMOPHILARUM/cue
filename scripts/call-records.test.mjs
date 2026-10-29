@@ -6,6 +6,7 @@ import {IDBFactory} from '../canvas/node_modules/fake-indexeddb/build/esm/index.
 async function setup(original={id:'abc-defg-hij',topic:'Weekly sync',captions:[{t:1000,text:'First',speaker:'Sam'},{t:86401000,text:'Next',speaker:'Sam'}],notes:[]},saved) {
   const listeners=[];let tabRemoved;
   const storage=saved?structuredClone(saved.storage):{call_index:[original.id],['call:'+original.id]:structuredClone(original)},session=structuredClone(saved?.session || {});
+  storage.capture_consent_granted=true;
   const files={};for(const name of ['background.js','native-background.js','browser-outbox.js','call-history.js'])files[name]=await readFile(new URL('../'+name,import.meta.url),'utf8');
   const context=vm.createContext({crypto,TextEncoder,indexedDB:new IDBFactory(),console,URL,WebSocket:{OPEN:1},setInterval,clearInterval,setTimeout:()=>0,clearTimeout,chrome:{runtime:{id:'fixture',onMessage:{addListener:listener=>listeners.push(listener)},getURL:path=>'chrome-extension://fixture/'+path},storage:{local:{get:async key=>typeof key==='string'?{[key]:structuredClone(storage[key])}:structuredClone(storage),set:async values=>Object.assign(storage,structuredClone(values))},session:{get:async key=>({[key]:session[key]}),set:async values=>Object.assign(session,structuredClone(values))},onChanged:{addListener(){}}},tabs:{onRemoved:{addListener:listener=>tabRemoved=listener}},alarms:{create(){},onAlarm:{addListener(){}}}}});
   context.importScripts=(...names)=>names.forEach(name=>vm.runInContext(files[name],context));
@@ -148,4 +149,22 @@ test('native events, history repair and legacy mutations serialize together; tab
   assert.ok(storage['call:'+next.id].ended_at);
   assert.deepEqual(session.auto_call_tabs,{});
   assert.deepEqual(session.retired_call_documents,{});
+});
+
+test('browser storage and native event intake fail closed before recording consent',async()=>{
+ const f=await setup();f.storage.capture_consent_granted=false;
+ const sender={id:'fixture',tab:{id:99,url:'https://meet.google.com/abc-defg-hij'},url:'https://meet.google.com/abc-defg-hij',documentId:'permission-document',frameId:0};
+ const before=JSON.stringify(f.storage);
+ for(const message of [
+  {type:'ENSURE_CALL',id:'abc-defg-hij',meta:{title:'must not be saved'}},
+  {type:'UPSERT_CAPTIONS',id:'abc-defg-hij',captions:[{text:'must not be saved'}]},
+  {type:'NATIVE_CALL_EVENT',event:'start'},
+  {type:'NATIVE_CALL_EVENT',event:'audio',frame:{pcm:'AAAA'}}
+ ])assert.equal((await f.send(message,sender)).permissionRequired,true);
+ assert.equal(JSON.stringify(f.storage),before);
+ f.storage.capture_consent_granted=true;
+ const started=await f.send({type:'NATIVE_CALL_EVENT',event:'start',presenceConfirmed:true},sender);
+ f.storage.capture_consent_granted=false;
+ assert.equal((await f.send({type:'NATIVE_CALL_EVENT',event:'end'},sender)).saved,true);
+ assert.ok(Number.isFinite(f.storage['call:'+started.id].ended_at),'Revocation must not prevent closing an already recorded call');
 });

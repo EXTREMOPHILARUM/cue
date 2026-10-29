@@ -422,6 +422,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type?.startsWith('NATIVE_')) return false;
   (async () => {
     try {
+      if(['ENSURE_CALL','ADD_CAPTIONS','UPSERT_CAPTIONS','UPDATE_META'].includes(msg.type)) {
+        const permission=await chrome.storage.local.get('capture_consent_granted');
+        const endOnly=msg.type==='UPDATE_META' && msg.meta && Object.keys(msg.meta).length===1 && Number.isFinite(msg.meta.ended_at);
+        if(permission.capture_consent_granted!==true && !endOnly){sendResponse({permissionRequired:true});return;}
+      }
       switch (msg.type) {
         case 'ACTIVE_CALL':
           sendResponse({id:await activeCallID(msg.tabId)});

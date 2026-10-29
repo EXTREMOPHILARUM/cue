@@ -69,6 +69,7 @@ struct CallActivationClicks: ViewModifier {
 struct MenuContent: View {
     static let symbol="waveform"
     @ObservedObject var model: AppModel
+    @ObservedObject private var runtime=AgentRuntime.shared
     let openHistory: () -> Void
     var body: some View {
         VStack(alignment:.leading,spacing:12) {
@@ -87,13 +88,15 @@ struct MenuContent: View {
                 .padding(.vertical,4)
             if let panel=model.panel {CoachingMenuControls(model:model,panel:panel)}
             Divider()
-            Toggle("Pause capture",isOn:Binding(get:{model.paused},set:{model.setPaused($0)})).toggleStyle(.switch).controlSize(.small)
+            if !model.captureConsentGranted {Label("Setup needed · recording permission",systemImage:"exclamationmark.circle").font(.caption)}
+            if model.aiConsentGranted,!runtime.installed.contains(model.aiProvider) {Label("Setup needed · \(model.aiProvider.title) tools",systemImage:"arrow.down.circle").font(.caption)}
+            Toggle("Pause capture",isOn:Binding(get:{model.paused},set:{model.setPaused($0)})).toggleStyle(.switch).controlSize(.small).disabled(!model.captureConsentGranted)
             Label(model.extensionConnected ? "Chrome connected":"Chrome not connected",systemImage:model.extensionConnected ? "checkmark.circle":"circle.dashed")
                 .font(.caption).foregroundStyle(.secondary)
             Divider()
             Button("Quit Cue",systemImage:"power") {NSApp.terminate(nil)}.keyboardShortcut("q")
         }.buttonStyle(.borderless).padding(20).frame(width:300)
-            .background(CallPalette.surface).tint(CallPalette.accent).modifier(CallActivationClicks())
+            .background(CallPalette.surface).tint(CallPalette.accent).modifier(CallActivationClicks()).onAppear {runtime.refresh()}
     }
 }
 struct CoachingMenuControls:View {
@@ -119,7 +122,8 @@ struct CoachingMenuControls:View {
     private var libraryWindow: NSWindow?
     init() {
         do {
-            let m=try AppModel();model=m;error="";m.attachPanel();m.loadModel()
+            let m=try AppModel();model=m;error="";m.attachPanel()
+            if m.speechModelDownloaded {m.loadModel()} else {m.modelStatus="Not downloaded"}
             DispatchQueue.main.async { [weak self] in self?.showLibrary() }
         } catch { model=nil;self.error=error.localizedDescription }
     }
@@ -193,6 +197,7 @@ struct CallTranscript: View {
 }
 struct LibraryView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject private var runtime=AgentRuntime.shared
     @State private var settings=false
     @State private var expandedSeries=Set<String>()
     @State private var selectedTab="transcript"
@@ -361,6 +366,7 @@ struct LibraryView: View {
                 }
             }.background(CallPalette.canvas)
         }.tint(CallPalette.accent).modifier(CallActivationClicks())
+        .onAppear {runtime.refresh();if !model.captureConsentGranted {settings=true}}
         .onChange(of:model.completedAutomaticSummary) {_,completion in
             if let completion,completion.session==model.activeSession {selectedTab="summary"}
         }.toolbar {
@@ -369,10 +375,10 @@ struct LibraryView: View {
                     Label(model.paused ? "Resume capture":"Pause capture",systemImage:model.paused ? "play.fill":"pause.fill")
                         .labelStyle(.titleAndIcon).font(.callout)
                         .padding(.horizontal,10).padding(.vertical,5)
-                }.buttonStyle(.plain).help(model.paused ? "Resume automatic call capture":"Pause automatic call capture")
+                }.buttonStyle(.plain).help(model.paused ? "Resume automatic call capture":"Pause automatic call capture").disabled(!model.captureConsentGranted)
             }
             ToolbarItem(placement:.primaryAction) {
-                Button { settings=true } label:{Label("Settings",systemImage:"gearshape")}.help("Settings")
+                Button { settings=true } label:{Label(!model.captureConsentGranted || !model.modelReady || !model.extensionConnected || (model.aiConsentGranted && !runtime.installed.contains(model.aiProvider)) ? "Finish setup":"Settings",systemImage:"gearshape")}.help("Setup, permissions, and settings")
             }
         }.sheet(isPresented:$settings){
             CallSettings(model:model)

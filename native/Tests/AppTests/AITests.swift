@@ -5,7 +5,7 @@ import CallCore
 final class AITests:XCTestCase {
     @MainActor func testRecurringProjectAppliesToPastAndFutureCallsAndCanBeRemoved() throws {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17409);defer {model.server.stop()}
+        let model=try AppModel(directory:root,port:17409);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop()}
         for id in ["one","two","other"] {
             try model.store.snapshot(id:id,record:["id":id,"series_id":id=="other" ? "different":"weekly"])
         }
@@ -45,7 +45,7 @@ final class AITests:XCTestCase {
         let preferences=try XCTUnwrap(UserDefaults(suiteName:suite))
         defer {preferences.removePersistentDomain(forName:suite)}
         preferences.set(AIProvider.claude.rawValue,forKey:"aiProvider")
-        let model=try AppModel(directory:root,port:17403,preferences:preferences)
+        let model=try AppModel(directory:root,port:17403,preferences:preferences);model.setCaptureConsent(true);model.setAIConsent(true)
         defer {model.server.stop()}
         for id in ["one","two"] {try model.store.snapshot(id:id,record:["id":"abc-defg-hij"])}
         let old=AIProject(path:root.path,conversation:UUID().uuidString,provider:.codex)
@@ -70,7 +70,7 @@ final class AITests:XCTestCase {
     }
     @MainActor func testAutomaticSummaryWaitsForAudioAndSurvivesSelectionChanges() async throws {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17404);defer {model.server.stop();model.stopAI()}
+        let model=try AppModel(directory:root,port:17404);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.stopAI()}
         model.automaticSummaries=true
         let record:[String:Any]=["id":"abc-defg-hij","captions":[["speaker":"Sam","text":"We need a pilot","t":1]]]
         for id in ["one","two"] {_ = try await model.request(role:"extension",request:["method":"snapshot","session":id,"peer":"fixture","record":record])}
@@ -107,7 +107,7 @@ final class AITests:XCTestCase {
     }
     @MainActor func testAutomaticSummaryFailureDoesNotRetryInALoop() async throws {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17405);defer {model.server.stop();model.stopAI()}
+        let model=try AppModel(directory:root,port:17405);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.stopAI()}
         model.automaticSummaries=true
         try model.store.snapshot(id:"one",record:["id":"abc-defg-hij","ended_at":2,"captions":[["text":"Pilot","speaker":"Sam","t":1]]])
         try model.store.append("one",kind:"summary-automation",body:["state":"queued","t":0.0,"requestID":"test"])
@@ -121,7 +121,7 @@ final class AITests:XCTestCase {
     }
     @MainActor func testLateAudioSupersedesAnAutomaticSummary() async throws {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17406);defer {model.server.stop();model.stopAI()}
+        let model=try AppModel(directory:root,port:17406);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.stopAI()}
         model.automaticSummaries=true
         var record:[String:Any]=["id":"abc-defg-hij","captions":[["text":"Pilot","speaker":"Sam","t":1]]]
         _ = try await model.request(role:"extension",request:["method":"snapshot","session":"one","peer":"fixture","record":record])
@@ -199,7 +199,7 @@ final class AITests:XCTestCase {
     }
     @MainActor func testSavedResultsProjectAndCancelledRunCannotCrossCalls() async throws {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17401);defer {model.server.stop();model.stopAI()}
+        let model=try AppModel(directory:root,port:17401);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.stopAI()}
         for id in ["one","two"] {
             try model.store.snapshot(id:id,record:["id":"abc-defg-hij","ended_at":2,"captions":[["text":"We need a pilot","speaker":"Sam","t":1]]])
         }
@@ -227,7 +227,7 @@ final class AITests:XCTestCase {
     }
     @MainActor func testEndingLiveCallCancelsInFlightCoaching() async throws {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
-        let model=try AppModel(directory:root,port:17402);defer {model.server.stop();model.stopAI()}
+        let model=try AppModel(directory:root,port:17402);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.stopAI()}
         let record:[String:Any]=["id":"abc-defg-hij","captions":[["text":"We need a pilot","speaker":"Sam","t":1]]]
         try model.store.snapshot(id:"live",record:record);model.select("live")
         var calls=0

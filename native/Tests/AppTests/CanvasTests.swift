@@ -49,7 +49,7 @@ final class CanvasTests: XCTestCase {
         _ = NSApplication.shared
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }
-        let model=try AppModel(directory:folder,port:17376)
+        let model=try AppModel(directory:folder,port:17376);model.setCaptureConsent(true);model.setAIConsent(true)
         defer { model.server.stop(); model.panel?.hide() }
         model.attachPanel()
         for _ in 0..<150 {

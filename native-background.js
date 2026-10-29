@@ -14,7 +14,8 @@ const nativeReady=chrome.storage.session.get('auto_call_tabs').then(async value=
 async function nativeState(error='') {
   const connected=nativeSocket?.readyState===WebSocket.OPEN;
   const pending=await outbox.count();
-  const state={connected,pending,error};
+  const permission=await chrome.storage.local.get(['capture_consent_granted','desktop_capture_paused']);
+  const state={connected,pending,error,permissionRequired:permission.capture_consent_granted!==true,capturePaused:permission.desktop_capture_paused===true};
   await chrome.storage.session.set({[nativeStateKey]:state});
   await chrome.action.setBadgeText({text:connected?(pending?'…':''): 'OFF'});
   await chrome.action.setBadgeBackgroundColor({color:connected?'#2358bf':'#a66100'});
@@ -30,6 +31,11 @@ function nativeRequest(method,args={}) {
     nativeSocket.send(JSON.stringify({id,method,...args}));
   });
 }
+async function nativeCaptureStatus(status) {
+  await chrome.storage.local.set({capture_consent_granted:status.captureConsentGranted===true,desktop_capture_paused:status.paused!==false});
+  const tabs=await chrome.tabs.query({});
+  await Promise.allSettled(tabs.map(tab=>chrome.tabs.sendMessage(tab.id,{type:status.captureConsentGranted===true && status.paused===false?'NATIVE_CAPTURE_RESUME':'NATIVE_CAPTURE_PAUSE'})));
+}
 async function nativeConnect() {
   if(nativeSocket?.readyState===WebSocket.OPEN)return;
   if(nativeConnecting)return nativeConnecting;
@@ -38,7 +44,7 @@ async function nativeConnect() {
     ws.onmessage=event=>{
       let response;try{response=JSON.parse(event.data);}catch{ws.close();return;}
       if(['paused','capture-failed','resumed'].includes(response.event)) {
-        void chrome.tabs.query({}).then(tabs=>Promise.allSettled(tabs.map(tab=>chrome.tabs.sendMessage(tab.id,{type:response.event==='resumed'?'NATIVE_CAPTURE_RESUME':'NATIVE_CAPTURE_PAUSE'}))));return;
+        void nativeRequest('status').then(nativeCaptureStatus).catch(()=>nativeState());return;
       }
       const entry=nativePending.get(response.id);if(!entry)return;
       nativePending.delete(response.id);clearTimeout(entry.timer);response.ok?entry.resolve(response.result):entry.reject(new Error(response.error));
@@ -51,7 +57,8 @@ async function nativeConnect() {
     };
     await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{ws.close();reject(new Error('Desktop app offline'));},3000);ws.onopen=()=>{clearTimeout(timer);resolve();};ws.onerror=()=>{clearTimeout(timer);reject(new Error('Desktop app offline'));};});
     await nativeRequest('hello',{role:'extension'});syncedSessions.clear();
-    nativeHeartbeat=setInterval(()=>{void nativeRequest('status').then(()=>nativeFlush()).catch(()=>nativeState());},20000);
+    await nativeCaptureStatus(await nativeRequest('status'));
+    nativeHeartbeat=setInterval(()=>{void nativeRequest('status').then(async status=>{await nativeCaptureStatus(status);await nativeFlush();}).catch(()=>nativeState());},20000);
     await nativeState();
   })();
   try{await nativeConnecting;}finally{nativeConnecting=null;}
@@ -138,6 +145,8 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(message.type==='NATIVE_CALL_EVENT') {
       if(sender.id!==chrome.runtime.id || !sender.tab || !/^https:\/\//.test(sender.url || ''))throw new Error('Expected browser call content script');
       await nativeReady;
+      const permission=await chrome.storage.local.get('capture_consent_granted');
+      if(permission.capture_consent_granted!==true && message.event!=='end')return {permissionRequired:true};
       const settings=await chrome.storage.local.get('auto_capture_enabled');
       if(settings.auto_capture_enabled===false && message.event==='audio')return {disabled:true};
       if(!sender.documentId || (sender.documentLifecycle && sender.documentLifecycle!=='active'))return {ignored:true};

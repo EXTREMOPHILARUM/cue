@@ -14,7 +14,10 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
     @Published private(set) var completedAutomaticSummary:SummaryCompletion?
     @Published var sessions: [[String: Any]] = []
     @Published var activeSession: String?
-    @Published var paused = false
+    @Published private(set) var paused = true
+    @Published private(set) var captureConsentGranted=false
+    @Published private(set) var aiConsentGranted=false
+    var speechModelDownloaded:Bool {Transcriber.downloaded(at:Transcriber.modelFolder())}
     @Published var prompt = "Canvas is loading"
     @Published var coachingTransparencyOverride=false {
         didSet {
@@ -91,7 +94,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
     private var pending = [AudioChunk]()
     private var processing = false
     private var processingArchive = false
-    private var modelReady = false
+    @Published private(set) var modelReady = false
     private var audioEpoch = 0
     private var drainingSession: String?
     private(set) var coaching: [String: Any]?
@@ -104,6 +107,9 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
         store = try SessionStore(path:root.appendingPathComponent("sessions.sqlite3").path)
         let client=acpClient
         aiGenerate={try await client.generate(provider:$0,mode:$1,input:$2,project:$3)}
+        captureConsentGranted=self.preferences?.bool(forKey:"captureConsentGranted") ?? false
+        aiConsentGranted=self.preferences?.bool(forKey:"aiConsentGranted") ?? false
+        paused = !captureConsentGranted
         aiProvider=AIProvider(rawValue:self.preferences?.string(forKey:"aiProvider") ?? "") ?? .codex
         aiProject.provider=aiProvider
         automaticSummaries=self.preferences?.bool(forKey:"automaticSummaries") ?? false
@@ -135,10 +141,18 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
         modelStatus = "Loading"
         Task {
             do { try await transcriber.load(); modelReady = true; modelStatus = "Ready · Roman Hinglish + English"; drainArchive() }
-            catch { modelStatus = "Model failed"; errorMessage = error.localizedDescription }
+            catch { modelReady=false;modelStatus = "Model failed"; errorMessage = error.localizedDescription }
         }
     }
-    func setPaused(_ value: Bool) { paused = value; if value { stopAI(); audioEpoch += 1; pending.removeAll(); clearCoaching(); server.broadcast("paused",role:"extension") } else { server.broadcast("resumed",role:"extension"); drainArchive() } }
+    func setCaptureConsent(_ granted:Bool) {
+        captureConsentGranted=granted;preferences?.set(granted,forKey:"captureConsentGranted")
+        setPaused(!granted)
+    }
+    func setAIConsent(_ granted:Bool) {
+        aiConsentGranted=granted;preferences?.set(granted,forKey:"aiConsentGranted")
+        if !granted {automaticSummaries=false;stopAI()}
+    }
+    func setPaused(_ value: Bool) { guard value || captureConsentGranted else {return};paused = value; if value { stopAI(); audioEpoch += 1; pending.removeAll(); clearCoaching(); server.broadcast("paused",role:"extension") } else { server.broadcast("resumed",role:"extension"); drainArchive() } }
     func clearCoaching() { coaching = nil; panel?.update(nil) }
     func select(_ id: String) {
         do {
@@ -215,11 +229,11 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
         let assistantOnly = ["coach","note","delete","export","prompt","import"]
         if role == "extension", assistantOnly.contains(method) { throw BridgeError("Method is not available to extension") }
         switch method {
-        case "status": return ["bridge":bridgeStatus,"model":modelStatus,"audioReady":modelReady,"activeSession":activeSession as Any? ?? NSNull(),"captureSession":captureSession as Any? ?? NSNull(),"paused":paused,"pendingAudio":pending.count + (try store.audioCount()),"storedAudioChunks":try store.archivedAudioCount(),"error":errorMessage,"aiBusy":aiBusy,"aiStatus":aiStatus,"aiError":aiError,"liveAISession":liveAISession as Any? ?? NSNull()]
+        case "status": return ["bridge":bridgeStatus,"model":modelStatus,"audioReady":modelReady,"captureConsentGranted":captureConsentGranted,"aiConsentGranted":aiConsentGranted,"activeSession":activeSession as Any? ?? NSNull(),"captureSession":captureSession as Any? ?? NSNull(),"paused":paused,"pendingAudio":pending.count + (try store.audioCount()),"storedAudioChunks":try store.archivedAudioCount(),"error":errorMessage,"aiBusy":aiBusy,"aiStatus":aiStatus,"aiError":aiError,"liveAISession":liveAISession as Any? ?? NSNull()]
         case "list": return ["sessions":try store.list()]
         case "detail": return try store.detail(session(request))
         case "ingest-audio":
-            guard !paused else { return ["paused":true] }
+            guard captureConsentGranted,!paused else { return ["paused":true] }
             let id = try session(request)
             guard let frame = request["frame"] as? [String:Any] else { throw BridgeError("Missing audio frame") }
             let added = try store.enqueueAudio(id,frame:frame)
@@ -232,7 +246,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
             return ["stored":true,"added":added]
         case "prompt": return ["prompt":prompt]
         case "snapshot", "import":
-            if role == "extension", paused { return ["paused":true] }
+            if role == "extension", !captureConsentGranted || paused { return ["paused":true] }
             let id = try Validation.identifier(request["session"])
             guard let record = request["record"] as? [String: Any] else { throw BridgeError("Missing record") }
             if role == "extension" {
@@ -326,6 +340,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
     func startLiveAI() {
         guard let id=activeSession else {return}
         do {
+            guard aiConsentGranted else {throw BridgeError("Allow optional AI processing in Settings → Setup before starting coaching")}
             guard !paused,(try store.detail(id)["meta"] as? [String:Any])?["ended"] as? Bool != true else {throw BridgeError("Select an ongoing call for live coaching")}
             try aiProject.validate(provider:aiProject.provider)
             stopAI();liveAISession=id;liveAIProject=aiProject;lastAIInput="";nextAI = .distantPast;panel?.beginSession();tickAI()
@@ -365,7 +380,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
         try store.append(id,kind:"summary-automation",body:["state":"queued","t":Date().timeIntervalSince1970,"requestID":UUID().uuidString])
     }
     func tickSummaries(now:Date = Date()) {
-        guard automaticSummaries,!paused,!aiBusy,liveAISession == nil else {return}
+        guard automaticSummaries,aiConsentGranted,!paused,!aiBusy,liveAISession == nil else {return}
         do {
             for pending in try store.pendingSummaries() {
                 guard let id=pending["session"] as? String,let requestID=pending["requestID"] as? String,
@@ -391,6 +406,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
         aiStatus="Preparing conversation…";aiError="";aiErrorSession=nil
         var project=project
         do {
+            guard aiConsentGranted else {throw BridgeError("Allow optional AI processing in Settings → Setup before using summaries or coaching")}
             if project.path.isEmpty {
                 try FileManager.default.createDirectory(at:aiDirectory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
                 project.path=aiDirectory.path
@@ -538,7 +554,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
                 }
             } catch {
                 errorMessage = "Transcription failed: \(error.localizedDescription)"
-                captureSession = nil; pending.removeAll(); modelReady = false; modelStatus = "Model failed"
+                captureSession = nil; pending.removeAll(); modelReady = false; modelStatus = "Model failed";paused=true
                 server.broadcast("capture-failed",role:"extension")
                 do { try store.append(chunk.session,kind:"audio-gap",body:["sequence":chunk.sequence,"error":error.localizedDescription]) } catch { errorMessage += "; could not save gap: \(error.localizedDescription)" }
             }

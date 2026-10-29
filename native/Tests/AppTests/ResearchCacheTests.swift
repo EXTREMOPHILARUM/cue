@@ -11,7 +11,7 @@ import XCTest
     }
     func testSwitchingProjectClearsExcerptsAndLateOldResultsCannotOverwriteNewOwner() async throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let model=try AppModel(directory:root,port:0)
+        let model=try AppModel(directory:root,port:0);model.setCaptureConsent(true);model.setAIConsent(true)
         defer {model.stopAI();model.server.stop();try? FileManager.default.removeItem(at:root)}
         let a=AIProject(path:root.appendingPathComponent("a").path),b=AIProject(path:root.appendingPathComponent("b").path),c=AIProject(path:root.appendingPathComponent("c").path)
         var delayed:CheckedContinuation<[[String:String]],Error>?
@@ -33,7 +33,7 @@ import XCTest
     }
     func testCanceledAndFailedLookupsCanRetryTheSameQuery() async throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let model=try AppModel(directory:root,port:0)
+        let model=try AppModel(directory:root,port:0);model.setCaptureConsent(true);model.setAIConsent(true)
         defer {model.stopAI();model.server.stop();try? FileManager.default.removeItem(at:root)}
         try model.store.snapshot(id:"call",record:["id":"call"])
         model.liveAISession="call"

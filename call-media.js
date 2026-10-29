@@ -237,7 +237,10 @@
               audio.copyTo(plane,{planeIndex:channel,format:'f32-planar'});
               for(let i=0;i<mono.length;i++)mono[i]+=plane[i]/audio.numberOfChannels;
             }
-            const entry=[...tap.identities].find(([time,record])=>audio.timestamp>=time && audio.timestamp<time+record.duration);
+            // Chrome's Opus timestamps can round one microsecond either side of the submitted value.
+            const entries=[...tap.identities];
+            const entry=entries.find(([time])=>Math.abs(audio.timestamp-time)<=1)
+              || entries.find(([time,record])=>audio.timestamp>=time && audio.timestamp<time+record.duration);
             const record=entry?.[1];
             if(entry && audio.timestamp+audio.numberOfFrames/audio.sampleRate*1000000>=entry[0]+record.duration-1)tap.identities.delete(entry[0]);
             tap.watchDecoder();

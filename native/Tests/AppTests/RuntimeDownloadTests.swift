@@ -17,6 +17,19 @@ final class RuntimeDownloadTests:XCTestCase {
         XCTAssertNoThrow(try RuntimeDownload.verify(Data("abc".utf8),sha256:digest))
         XCTAssertThrowsError(try RuntimeDownload.verify(Data("changed".utf8),sha256:digest))
     }
+    func testCacheCheckFindsCompleteSelectedProviderWithoutInstallingAnything() throws {
+        let support=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer {try? FileManager.default.removeItem(at:support)}
+        XCTAssertNil(RuntimeDownload.cachedRoot(.codex,support:support))
+        let root=try RuntimeDownload.destination(.codex,support:support)
+        try fixture(root)
+        XCTAssertNil(RuntimeDownload.cachedRoot(.codex,support:support),"Partial downloads are not ready")
+        try Data().write(to:root.appendingPathComponent("ready"))
+        XCTAssertEqual(RuntimeDownload.cachedRoot(.codex,support:support),root)
+        XCTAssertNil(RuntimeDownload.cachedRoot(.claude,support:support),"One provider must not count for another")
+        try FileManager.default.setAttributes([.posixPermissions:0o644],ofItemAtPath:root.appendingPathComponent("node-runtime/bin/node").path)
+        XCTAssertNil(RuntimeDownload.cachedRoot(.codex,support:support))
+    }
     func testFailedIncompleteAndRetriedInstallationPreserveCache() throws {
         let base=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {try? FileManager.default.removeItem(at:base)}

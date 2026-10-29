@@ -9,7 +9,7 @@ final class TranscriptionTests: XCTestCase {
         let frames=try JSONSerialization.jsonObject(with:Data(contentsOf:URL(fileURLWithPath:path))) as! [[String:Any]]
         let directory=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:directory) }
-        let model=try AppModel(directory:directory,port:17380)
+        let model=try AppModel(directory:directory,port:17380);model.setCaptureConsent(true);model.setAIConsent(true)
         defer { model.server.stop() }
         _ = try await model.request(role:"extension",request:["method":"snapshot","session":"webrtc","peer":"fixture","record":["id":"webrtc","ended":true]])
         for frame in frames {

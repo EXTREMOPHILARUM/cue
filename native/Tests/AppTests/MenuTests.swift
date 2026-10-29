@@ -40,7 +40,7 @@ final class MenuTests: XCTestCase {
         _ = NSApplication.shared
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }
-        let model = try AppModel(directory:folder,port:17378)
+        let model = try AppModel(directory:folder,port:17378);model.setCaptureConsent(true);model.setAIConsent(true)
         defer { model.server.stop() }
         model.modelStatus = "Loading"
         let view = NSHostingView(rootView:MenuContent(model:model,openHistory:{}))
