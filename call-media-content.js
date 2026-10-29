@@ -8,6 +8,7 @@
       const result=await chrome.runtime.sendMessage({type:'NATIVE_CALL_EVENT',event:'start',presenceConfirmed});
       if(result?.error)throw new Error(result.error);
     }).catch(error=>{enabled=false;control();notice(`Cue stopped: ${error.message}`);});
+    if(next!==enabled && callStarted)notice(next?'Cue · saving this call locally':'Cue · capture paused; check app Setup');
     enabled=next;control();
   });}
   refresh();

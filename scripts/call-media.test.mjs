@@ -289,7 +289,8 @@ test('audio content bridge stays disabled before consent and honors app pause an
  const state={},controls=[],storageListeners=[],runtimeListeners=[],listeners={},messages=[];
  const window={postMessage:message=>controls.push(message),addEventListener:(type,fn)=>listeners[type]=fn};
  const chrome={storage:{local:{get:(keys,callback)=>callback({...state})},onChanged:{addListener:fn=>storageListeners.push(fn)}},runtime:{onMessage:{addListener:fn=>runtimeListeners.push(fn)},sendMessage:async message=>{messages.push(message);return {};}}};
- const document={getElementById:()=>null,createElement:()=>({style:{}}),body:{append(){}}};
+ let banner;
+ const document={getElementById:()=>banner,createElement:()=>({style:{}}),body:{append:node=>banner=node}};
  const context=vm.createContext({window,document,chrome,location:{origin:'https://meet.google.com'},Promise});
  vm.runInContext(await readFile(new URL('../call-media-content.js',import.meta.url),'utf8'),context);
  const update=values=>{Object.assign(state,values);storageListeners[0](Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{newValue:value}])),'local');};
@@ -298,9 +299,9 @@ test('audio content bridge stays disabled before consent and honors app pause an
  listeners.message({source:window,origin:'https://meet.google.com',data:{source:'call-assistant-media',event:'start',presenceConfirmed:true}});
  await new Promise(setImmediate);assert.equal(messages.length,1);
  update({capture_consent_granted:true,desktop_capture_paused:false});assert.equal(controls.at(-1).enabled,true);
- await new Promise(setImmediate);assert.equal(messages.length,2);assert.equal(messages[1].event,'start');
+ await new Promise(setImmediate);assert.equal(messages.length,2);assert.equal(messages[1].event,'start');assert.match(banner.textContent,/saving this call/);
  runtimeListeners[0]({type:'NATIVE_CAPTURE_PAUSE'});assert.equal(controls.at(-1).enabled,false);
  update({capture_consent_granted:true});assert.equal(controls.at(-1).enabled,false);
  runtimeListeners[0]({type:'NATIVE_CAPTURE_RESUME'});assert.equal(controls.at(-1).enabled,true);
- update({capture_consent_granted:false});assert.equal(controls.at(-1).enabled,false);
+ update({capture_consent_granted:false});assert.equal(controls.at(-1).enabled,false);assert.match(banner.textContent,/capture paused/);
 });
