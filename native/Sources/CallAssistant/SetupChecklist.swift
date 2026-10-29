@@ -7,8 +7,10 @@ struct SetupChecklist:View {
     var body:some View {
         Section("Readiness") {
             Label(model.extensionConnected ? "Chrome extension connected":"Chrome extension needs setup",systemImage:model.extensionConnected ? "checkmark.circle":"exclamationmark.circle")
-            Label(model.modelReady ? "Speech model ready":model.speechModelDownloaded ? "Speech model found · needs loading":"Speech model needs downloading",systemImage:model.modelReady ? "checkmark.circle":"arrow.down.circle")
-            Label(runtime.installed.contains(model.aiProvider) ? "\(model.aiProvider.title) tools already installed":model.aiConsentGranted ? "\(model.aiProvider.title) tools need downloading":"AI tools optional · not downloaded",systemImage:runtime.installed.contains(model.aiProvider) ? "checkmark.circle":"arrow.down.circle")
+            if model.modelStatus=="Loading" {Label("Speech model downloading / loading…",systemImage:"clock")}
+            else {Label(model.modelReady ? "Speech model ready":model.speechModelDownloaded ? "Speech model found · needs loading":"Speech model needs downloading",systemImage:model.modelReady ? "checkmark.circle":"arrow.down.circle")}
+            if runtime.downloading.contains(model.aiProvider) {Label(runtime.status[model.aiProvider] ?? "Preparing AI tools…",systemImage:"clock")}
+            else {Label(runtime.installed.contains(model.aiProvider) ? "\(model.aiProvider.title) tools already installed":model.aiConsentGranted ? "\(model.aiProvider.title) tools need downloading":"AI tools optional · not downloaded",systemImage:runtime.installed.contains(model.aiProvider) ? "checkmark.circle":"arrow.down.circle")}
         }
         Section("1 · Recording permission") {
             Toggle("Allow Cue to save and process call audio and captions",isOn:Binding(get:{model.captureConsentGranted},set:{model.setCaptureConsent($0)}))
