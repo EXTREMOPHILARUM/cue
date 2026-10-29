@@ -201,7 +201,7 @@ final class AITests:XCTestCase {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
         let model=try AppModel(directory:root,port:17401);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.stopAI()}
         for id in ["one","two"] {
-            try model.store.snapshot(id:id,record:["id":"abc-defg-hij","ended_at":2,"captions":[["text":"We need a pilot","speaker":"Sam","t":1]]])
+            try model.store.snapshot(id:id,record:["id":"abc-defg-hij","ended_at":2,"captions":[["text":"We need a small pilot with a clear owner and a review next week","speaker":"Sam","t":1]]])
         }
         var result=try JSONDecoder().decode(AIResponse.self,from:Data(answer.utf8))
         result=AIResponse(headline:result.headline,question:result.question,points:result.points,summary:result.summary,decisions:[],actions:[],uncertainties:[],evidence:["meet-0"],shouldUpdate:true)
@@ -228,7 +228,7 @@ final class AITests:XCTestCase {
     @MainActor func testEndingLiveCallCancelsInFlightCoaching() async throws {
         let root=try folder();defer {try? FileManager.default.removeItem(at:root)}
         let model=try AppModel(directory:root,port:17402);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.server.stop();model.stopAI()}
-        let record:[String:Any]=["id":"abc-defg-hij","captions":[["text":"We need a pilot","speaker":"Sam","t":1]]]
+        let record:[String:Any]=["id":"abc-defg-hij","captions":[["text":"We need a small pilot with a clear owner and a review next week","speaker":"Sam","t":1]]]
         try model.store.snapshot(id:"live",record:record);model.select("live")
         var calls=0
         model.aiGenerate={_,_,_,_ in

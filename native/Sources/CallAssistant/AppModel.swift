@@ -17,6 +17,10 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
     @Published private(set) var paused = true
     @Published private(set) var captureConsentGranted=false
     @Published private(set) var aiConsentGranted=false
+    @Published var liveRefinementEnabled=true {didSet {preferences?.set(liveRefinementEnabled,forKey:"liveRefinementEnabled")}}
+    private var refinementOwner=""
+    private var nextLiveRefinement=Date.distantPast
+    private var lastLiveRefinement=""
     var speechModelDownloaded:Bool {Transcriber.downloaded(at:Transcriber.modelFolder())}
     @Published var prompt = "Canvas is loading"
     @Published var coachingTransparencyOverride=false {
@@ -109,6 +113,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
         aiGenerate={try await client.generate(provider:$0,mode:$1,input:$2,project:$3)}
         captureConsentGranted=self.preferences?.bool(forKey:"captureConsentGranted") ?? false
         aiConsentGranted=self.preferences?.bool(forKey:"aiConsentGranted") ?? false
+        liveRefinementEnabled=self.preferences?.object(forKey:"liveRefinementEnabled") as? Bool ?? true
         paused = !captureConsentGranted
         aiProvider=AIProvider(rawValue:self.preferences?.string(forKey:"aiProvider") ?? "") ?? .codex
         aiProject.provider=aiProvider
@@ -129,6 +134,7 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
             Task { @MainActor in
                 guard let self else { return }
                 self.drainArchive()
+                self.tickLiveRefinement()
                 self.tickAI()
                 self.tickSummaries()
             }
@@ -362,10 +368,26 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
             guard !(detail["segments"] as? [[String:Any]] ?? []).isEmpty else {aiStatus="Listening · waiting for transcript";return}
             let context=researchContext(id:id,project:liveAIProject)
             let input=try AIInput.make(detail:detail,mode:.coaching,background:liveAIProject.background,previous:nil,project:liveAIProject,research:context)
-            guard coachingSchedule.ready(input.fingerprint,now:now) else {return}
-            coachingSchedule.submitted(input.fingerprint,now:now)
+            guard coachingSchedule.ready(input.fingerprint,context:input.spokenText,now:now) else {return}
+            coachingSchedule.submitted(input.fingerprint,context:input.spokenText,now:now)
             performAI(id:id,mode:.coaching,project:liveAIProject)
         } catch {stopAI();aiError=error.localizedDescription;aiErrorSession=id}
+    }
+    func tickLiveRefinement(now:Date=Date()) {
+        guard liveRefinementEnabled,aiConsentGranted,captureConsentGranted,!paused,extensionConnected,!aiBusy,
+              let id=activeSession,liveAISession==nil || liveAISession==id else {return}
+        if refinementOwner != id {refinementOwner=id;nextLiveRefinement=now.addingTimeInterval(20);lastLiveRefinement="";return}
+        guard now>=nextLiveRefinement else {return}
+        nextLiveRefinement=now.addingTimeInterval(30)
+        do {
+            let detail=try store.detail(id)
+            guard (detail["meta"] as? [String:Any])?["ended"] as? Bool != true,!(detail["segments"] as? [[String:Any]] ?? []).isEmpty else {return}
+            let project=try projectForCall(detail)
+            let input=try AIInput.liveRefinement(detail:detail)
+            guard input.fingerprint != lastLiveRefinement else {return}
+            lastLiveRefinement=input.fingerprint
+            performAI(id:id,mode:.refinement,project:project)
+        } catch {aiError="Live refinement: "+error.localizedDescription}
     }
     func setCoachingPaused(_ value:Bool) {
         guard liveAISession != nil else {return}
@@ -414,14 +436,19 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
             try project.validate(provider:project.provider)
             let detail=try store.detail(id)
             let saved=detail["aiCoaching"] as? [String:Any]
-            let previous = !project.conversation.isEmpty && saved?["provider"] as? String==project.provider.rawValue && saved?["project"] as? String==project.path && saved?["conversationID"] as? String==project.conversation ? saved:nil
+            var previous = !project.conversation.isEmpty && saved?["provider"] as? String==project.provider.rawValue && saved?["project"] as? String==project.path && saved?["conversationID"] as? String==project.conversation ? saved:nil
+            if mode == .coaching,let active=coaching,active["session"] as? String==id {
+                if previous==nil {previous=[:]}
+                previous?["activeSuggestion"]=["headline":active["headline"] ?? "","response":active["fallback"] ?? "","points":active["points"] ?? []]
+            }
             let context=researchContext(id:id,project:project)
             let inputs:[AIInput]
             if mode == .summary {inputs=try AIInput.summaryChunks(detail:detail,background:project.background,project:project,research:context)}
+            else if mode == .refinement {inputs=[try AIInput.liveRefinement(detail:detail)]}
             else {inputs=[try AIInput.make(detail:detail,mode:mode,background:project.background,previous:previous,project:project,research:context)]}
             let input=inputs[0]
             nextAI = .distantPast
-            if liveAISession==id,input.fingerprint==lastAIInput {aiStatus="Listening · waiting for new transcript";return}
+            if mode == .coaching,liveAISession==id,input.fingerprint==lastAIInput {aiStatus="Listening · waiting for new transcript";return}
             try store.append(id,kind:"ai-settings",body:try JSONSerialization.jsonObject(with:JSONEncoder().encode(project)) as! [String:Any])
             aiRun=UUID();let run=aiRun
             aiBusy=true;aiSession=id;automaticSummarySession=automaticRequest == nil ? nil:id;aiError="";aiStatus="\(project.provider.title) · generating \(mode.rawValue)…"
@@ -443,17 +470,22 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
                         result["refinedSegments"]=response.refinedSegments(sources:sources)
                         result["refinementSources"]=try Validation.json(sources)
                     }
-                    try self.store.append(id,kind:"ai-"+mode.rawValue,body:result)
+                    if mode == .refinement {
+                        try response.validateRefinement(segmentIDs:input.segmentIDs)
+                        let sources=(detail["segments"] as? [[String:Any]] ?? []).filter{input.segmentIDs.contains($0["id"] as? String ?? "")}
+                        try self.store.saveLiveRefinement(id,sources:sources,turns:response.refinedSegments(sources:sources))
+                    } else {try self.store.append(id,kind:"ai-"+mode.rawValue,body:result)}
                     if mode == .summary {try self.finishSummary(id,state:"complete")}
                     var updated=project
                     if let conversation=response.conversationID {updated.conversation=conversation}
                     try self.store.append(id,kind:"ai-settings",body:try JSONSerialization.jsonObject(with:JSONEncoder().encode(updated)) as! [String:Any])
                     if self.activeSession==id {self.aiProject=updated}
-                    if self.liveAISession==id {self.liveAIProject=updated;self.lastAIInput=input.fingerprint}
+                    if self.liveAISession==id {self.liveAIProject=updated;if mode == .coaching {self.lastAIInput=input.fingerprint}}
                     if mode == .coaching,(self.activeSession==id || self.liveAISession==id) {
+                        let priorKey=self.coaching?["signature"] as? String
                         if response.retirePrevious == true {self.clearCoaching()}
-                        if response.shouldUpdate {
-                            let value:[String:Any]=["id":UUID().uuidString,"session":id,"headline":response.headline,"program":try response.canvas(research:context),"fallback":response.question]
+                        if response.shouldUpdate,priorKey != response.coachingKey {
+                            let value:[String:Any]=["id":UUID().uuidString,"session":id,"headline":response.headline,"program":try response.canvas(research:context),"fallback":response.question,"points":response.points,"signature":response.coachingKey]
                             self.coaching=value;self.panel?.update(value);self.panel?.showSuggestion()
                         }
                         if let query=response.researchQuery,!query.isEmpty {self.lookupProject(query,id:id,project:updated)}
@@ -463,7 +495,8 @@ struct SummaryCompletion:Equatable {let session:String;let requestID:String}
                 } catch {
                     guard let self,self.aiRun==run else {return}
                     self.aiBusy=false;self.aiSession=nil;self.automaticSummarySession=nil;self.aiTask=nil
-                    self.aiError=error.localizedDescription;self.aiErrorSession=id;self.aiStatus="AI stopped";self.liveAISession=nil
+                    self.aiError=error.localizedDescription;self.aiErrorSession=id;self.aiStatus=mode == .refinement ? "Live refinement paused · capture continues":"AI stopped"
+                    if mode != .refinement {self.liveAISession=nil}
                     if mode == .summary {
                         do {
                             let currentRequest=try self.store.summaryAutomation(id)["requestID"] as? String

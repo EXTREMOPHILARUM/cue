@@ -30,6 +30,19 @@ final class ArchiveTests:XCTestCase {
 }
 
 extension ArchiveTests {
+    func testSmallCaptureFramesAccumulateSentenceContextInsteadOfStoppingAtEightFrames() throws {
+        let store=try SessionStore(path:":memory:")
+        try store.snapshot(id:"one",record:["id":"one"])
+        let pcm=[Float](repeating:0.2,count:4000).withUnsafeBytes{Data($0).base64EncodedString()}
+        for index in 0..<72 {
+            _ = try store.enqueueAudio("one",frame:["id":"small-\(index)","source":"remote","trackID":"one-track","participantID":"one-person","speaker":"Fixture speaker","attribution":"meet-rtp","sampleRate":16000,"startedAt":1000.0+Double(index)*250,"pcm":pcm])
+        }
+        let batch=try store.nextAudioBatch(now:19000)
+        XCTAssertEqual(batch.count,64,"Whisper needs sixteen seconds of context, not eight quarter-second packets")
+        try store.finishAudioBatch(batch,text:"A complete synthetic sentence.")
+        XCTAssertEqual(try store.audioCount(),8)
+        XCTAssertEqual(try store.archivedAudioCount(),72)
+    }
     func testEachCallIsIndependentEvenOnTheSameMeetingLink() throws {
         let store=try SessionStore(path:":memory:")
         let record:[String:Any]=["id":"call-one","independent_call":true,"series_id":"same-link","captions":[["text":"Opening","speaker":"Sam","t":1000.0],["text":"After a long pause","speaker":"Sam","t":86401000.0]]]

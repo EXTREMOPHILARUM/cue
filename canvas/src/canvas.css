@@ -59,3 +59,8 @@ header .panel-close:hover { background: var(--hover); }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media (prefers-reduced-transparency: reduce) { :root:not(.translucent-coaching) .question { background: var(--surface); } }
+
+.coaching-history { margin-top: 20px; max-height: 240px; overflow-y: auto; border-top: 1px solid var(--line); padding-top: 16px; }
+.coaching-history > h2 { color: var(--secondary); }
+.coaching-history article { border-top: 1px solid var(--line); padding: 12px 0; }
+.coaching-history p, .coaching-history li { font-size: 13px; line-height: 1.5; }

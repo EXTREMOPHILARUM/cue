@@ -92,7 +92,7 @@ final class CoachingLoopTests:XCTestCase {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {try? FileManager.default.removeItem(at:root)}
         let model=try AppModel(directory:root,port:17425);model.setCaptureConsent(true);model.setAIConsent(true);defer {model.stopAI();model.server.stop()}
-        try model.store.snapshot(id:"live",record:["id":"abc-defg-hij","captions":[["text":"Pilot","t":1]]]);model.select("live")
+        try model.store.snapshot(id:"live",record:["id":"abc-defg-hij","captions":[["text":"We need a small pilot with a clear owner and a review next week","t":1]]]);model.select("live")
         var requests=0
         model.aiGenerate={_,_,_,_ in requests += 1;try await Task.sleep(nanoseconds:10_000_000_000);throw CancellationError()}
         model.startLiveAI();try await Task.sleep(nanoseconds:20_000_000)
@@ -106,18 +106,21 @@ final class CoachingLoopTests:XCTestCase {
         XCTAssertEqual(requests,3);XCTAssertEqual(model.aiProject.provider,.claude)
         XCTAssertEqual(model.liveAISession,"live")
     }
-    func testTranscriptDebounceDoesNotStarveContinuousSpeechOrRepeatIdleRequests() {
+    func testTranscriptDebounceWaitsForContextAndDoesNotRepeatMetadataOnlyUpdates() {
         var schedule=CoachingSchedule()
         let start=Date(timeIntervalSince1970:100)
-        XCTAssertTrue(schedule.ready("first",now:start));schedule.submitted("first",now:start)
-        XCTAssertFalse(schedule.ready("first",now:start.addingTimeInterval(10)))
-        XCTAssertFalse(schedule.ready("second",now:start.addingTimeInterval(11)))
-        XCTAssertTrue(schedule.ready("second",now:start.addingTimeInterval(12)))
-        schedule.submitted("second",now:start.addingTimeInterval(12))
-        XCTAssertFalse(schedule.ready("third",now:start.addingTimeInterval(13)))
-        XCTAssertFalse(schedule.ready("fourth",now:start.addingTimeInterval(14)))
-        XCTAssertFalse(schedule.ready("fifth",now:start.addingTimeInterval(15)))
-        XCTAssertTrue(schedule.ready("sixth",now:start.addingTimeInterval(16)))
+        XCTAssertFalse(schedule.ready("fragment",context:"To",now:start))
+        let context="We need a small pilot with a clear owner and a review next week"
+        XCTAssertTrue(schedule.ready("first",context:context,now:start.addingTimeInterval(2)))
+        schedule.submitted("first",context:context,now:start.addingTimeInterval(2))
+        XCTAssertFalse(schedule.ready("metadata-only",context:context,now:start.addingTimeInterval(60)))
+        let next=context+" The team can share its plan tomorrow."
+        XCTAssertFalse(schedule.ready("next",context:next,now:start.addingTimeInterval(61)))
+        XCTAssertTrue(schedule.ready("next",context:next,now:start.addingTimeInterval(63)))
+        schedule.submitted("next",context:next,now:start.addingTimeInterval(63))
+        let question=next+" What should we propose?"
+        XCTAssertFalse(schedule.ready("question",context:question,now:start.addingTimeInterval(66)))
+        XCTAssertTrue(schedule.ready("question",context:question,now:start.addingTimeInterval(68)))
     }
     func testProjectSearchKeepsSourcesBoundedAndSkipsSecretsAndExternalSymlinks() throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -177,4 +180,10 @@ final class CoachingLoopTests:XCTestCase {
         XCTAssertFalse(model.aiBusy);XCTAssertTrue(model.aiError.isEmpty,model.aiError)
         XCTAssertNil(model.coaching)
     }
+    func testCoachingIdentityIgnoresHeadlineAndPunctuationOnlyChanges() {
+        let first=AIResponse(headline:"Pilot",question:"Start with a small pilot.",points:["Review next week."],summary:"",decisions:[],actions:[],uncertainties:[],evidence:["one"],shouldUpdate:true)
+        let reworded=AIResponse(headline:"Next step",question:"Start with a small pilot!",points:["Review next week"],summary:"",decisions:[],actions:[],uncertainties:[],evidence:["two"],shouldUpdate:true)
+        XCTAssertEqual(first.coachingKey,reworded.coachingKey)
+    }
+
 }

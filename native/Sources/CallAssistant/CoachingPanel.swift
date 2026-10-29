@@ -105,7 +105,7 @@ import Combine
         current = value
         updateControls()
         guard ready else { return }
-        web.callAsyncJavaScript("window.callAssistant.update(value)",arguments:["value":value as Any? ?? NSNull()],in:nil,in:.page) { [weak self] result in
+        web.callAsyncJavaScript("window.callAssistant.update(value, owner)",arguments:["value":value as Any? ?? NSNull(),"owner":model?.activeSession as Any? ?? NSNull()],in:nil,in:.page) { [weak self] result in
             if case .failure(let error) = result { self?.model?.errorMessage = "Canvas update failed: \(error.localizedDescription)" }
         }
     }

@@ -33,8 +33,10 @@ struct SetupChecklist:View {
             Text(model.speechModelDownloaded ? "Model files already exist on this Mac; Cue reuses them.":"Download once for Roman Hinglish and English transcription. Transcription runs locally afterward.").font(.caption).foregroundStyle(CallPalette.muted)
             if !model.modelReady,!model.errorMessage.isEmpty {Text(model.errorMessage).font(.caption).foregroundStyle(.red).textSelection(.enabled)}
         }
-        Section("4 · Optional AI coaching and summaries") {
+        Section("4 · Optional AI coaching, refinement and summaries") {
             Toggle("Allow call text and attached context to be sent to my AI provider",isOn:Binding(get:{model.aiConsentGranted},set:{model.setAIConsent($0)}))
+            Toggle("Refine transcript during calls",isOn:$model.liveRefinementEnabled).disabled(!model.aiConsentGranted)
+            Text("Checks recent speech about every 30 seconds between coaching requests. Originals remain available.").font(.caption).foregroundStyle(CallPalette.muted)
             Picker("Provider",selection:$model.aiProvider) {ForEach(AIProvider.allCases,id:\.self){Text($0.title).tag($0)}}
                 .disabled(model.aiBusy || model.liveAISession != nil)
             Label(runtime.status[model.aiProvider] ?? "Checking installed tools…",systemImage:runtime.installed.contains(model.aiProvider) ? "checkmark.circle":"exclamationmark.circle")

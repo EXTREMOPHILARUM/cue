@@ -187,10 +187,18 @@ public final class SessionStore {
         guard let first = try nextAudio() else { return [] }
         let session = first["session"] as! String, source = first["source"] as! String
         let track = first["trackID"] as? String ?? ""
-        let candidates = try rows("SELECT body FROM audio_queue WHERE session=? AND json_extract(body,'$.source')=? AND COALESCE(json_extract(body,'$.trackID'),'')=? ORDER BY rowid LIMIT 8",[session,source,track]).map { try decode($0["body"]!) }
+        var statement:OpaquePointer?
+        let sql="SELECT body FROM audio_queue WHERE session=? AND json_extract(body,'$.source')=? AND COALESCE(json_extract(body,'$.trackID'),'')=? ORDER BY rowid LIMIT 1024"
+        guard sqlite3_prepare_v2(db,sql,-1,&statement,nil)==SQLITE_OK else {throw error()}
+        defer {sqlite3_finalize(statement)}
+        for (index,arg) in [session,source,track].enumerated(){sqlite3_bind_text(statement,Int32(index+1),arg,-1,transient)}
         var batch = [[String:Any]](), duration = 0.0, end = 0.0, discontinuity = false
         let firstSpeaker=try speakerKey(first)
-        for frame in candidates {
+        while true {
+            let code=sqlite3_step(statement)
+            if code==SQLITE_DONE {break}
+            guard code==SQLITE_ROW,let body=sqlite3_column_text(statement,0) else {throw error()}
+            let frame=try decode(String(cString:body))
             let chunk = try AudioChunk.decode(frame)
             let differentSpeaker=try speakerKey(frame) != firstSpeaker
             if !batch.isEmpty && (abs(chunk.startedAt - end) > 1000 || differentSpeaker) { discontinuity = true; break }
@@ -301,14 +309,50 @@ public final class SessionStore {
                 "notes":try rows("SELECT body FROM events WHERE session=? AND (kind='note' OR kind LIKE 'import-note-%') ORDER BY cursor DESC LIMIT 50",[id]).reversed().map{try decode($0["body"]!)},
                 "aiSettings":try rows("SELECT body FROM events WHERE session=? AND kind='ai-settings' ORDER BY cursor DESC LIMIT 1",[id]).first.map{try decode($0["body"]!)} ?? [:],
                 "aiSummary":try rows("SELECT body FROM events WHERE session=? AND kind='ai-summary' ORDER BY cursor DESC LIMIT 1",[id]).first.map{try decode($0["body"]!)} ?? [:],
+                "liveRefinement":try rows("SELECT body FROM events WHERE session=? AND kind='ai-refinement' ORDER BY cursor DESC LIMIT 1",[id]).first.map{try decode($0["body"]!)} ?? [:],
                 "summaryAutomation":try summaryAutomation(id),
                 "feedback":try rows("SELECT body FROM events WHERE session=? AND kind='feedback' ORDER BY cursor DESC LIMIT 8",[id]).reversed().map{try decode($0["body"]!)},
                 "aiCoaching":try rows("SELECT body FROM events WHERE session=? AND kind='ai-coaching' ORDER BY cursor DESC LIMIT 1",[id]).first.map{try decode($0["body"]!)} ?? [:]]
     }
     public func refinedTranscript(_ detail:[String:Any]) throws -> [[String:Any]] {
         let summary=detail["aiSummary"] as? [String:Any] ?? [:]
-        guard summary["refinementSources"] as? String == (try Validation.json(detail["segments"] ?? [])) else {return []}
-        return summary["refinedSegments"] as? [[String:Any]] ?? []
+        let originals=detail["segments"] as? [[String:Any]] ?? []
+        if let snapshot=summary["refinementSources"] as? String,snapshot == (try Validation.json(originals)) {return summary["refinedSegments"] as? [[String:Any]] ?? []}
+        let live=detail["liveRefinement"] as? [String:Any] ?? [:]
+        guard let snapshot=live["refinementSources"] as? String,
+              let sources=try JSONSerialization.jsonObject(with:Data(snapshot.utf8)) as? [[String:Any]] else {return []}
+        var covered=Set<String>(),valid=[[String:Any]]()
+        var before=[String:String](),after=[String:String]()
+        for source in sources {if let id=source["id"] as? String {before[id]=try Validation.json(source)}}
+        for source in originals {if let id=source["id"] as? String {after[id]=try Validation.json(source)}}
+        for turn in live["refinedSegments"] as? [[String:Any]] ?? [] {
+            let ids=turn["sourceIDs"] as? [String] ?? []
+            let unchanged = !ids.isEmpty && ids.allSatisfy{before[$0] != nil && before[$0]==after[$0]}
+            if unchanged {valid.append(turn);covered.formUnion(ids)}
+        }
+        guard !valid.isEmpty else {return []}
+        return (valid+originals.filter{!covered.contains($0["id"] as? String ?? "")}).sorted{($0["t"] as? Double ?? 0)<($1["t"] as? Double ?? 0)}
+    }
+    public func saveLiveRefinement(_ session:String,sources:[[String:Any]],turns:[[String:Any]]) throws {
+        let detail=try detail(session)
+        let current=detail["segments"] as? [[String:Any]] ?? []
+        let ids=Set(sources.compactMap{$0["id"] as? String})
+        let covered=Set(turns.flatMap{$0["sourceIDs"] as? [String] ?? []})
+        guard !ids.isEmpty,sources.count==ids.count,ids==covered,ids.isSubset(of:Set(current.compactMap{$0["id"] as? String})),turns.allSatisfy({!($0["sourceIDs"] as? [String] ?? []).isEmpty}) else {throw BridgeError("Live refinement has incomplete or invented sources")}
+        let previous=detail["liveRefinement"] as? [String:Any] ?? [:]
+        let oldSources=try (previous["refinementSources"] as? String).flatMap{try JSONSerialization.jsonObject(with:Data($0.utf8)) as? [[String:Any]]} ?? []
+        let oldTurns=(previous["refinedSegments"] as? [[String:Any]] ?? []).filter{Set($0["sourceIDs"] as? [String] ?? []).isDisjoint(with:ids)}
+        let corrected=turns.enumerated().map {index,turn -> [String:Any] in
+            let linked=sources.filter{(turn["sourceIDs"] as? [String] ?? []).contains($0["id"] as? String ?? "")}
+            let names=Set(linked.compactMap{$0["speaker"] as? String}.filter{!$0.isEmpty && $0 != "Unknown"})
+            var result=turn;result["id"]="live-refined-\(linked.first?["id"] as? String ?? "")-\(index)";result["source"]="Refined transcript"
+            result["speaker"]=names.count==1 ? names.first!:"Unknown";result["t"]=linked.compactMap{$0["t"] as? Double}.min() ?? 0
+            return result
+        }
+        // shortcut: retain 400 live turns; add paged refinement storage for longer corrected live histories.
+        let merged=Array((oldTurns+corrected).sorted{($0["t"] as? Double ?? 0)<($1["t"] as? Double ?? 0)}.suffix(400))
+        let retained=Set(merged.flatMap{$0["sourceIDs"] as? [String] ?? []})
+        try append(session,kind:"ai-refinement",body:["refinedSegments":merged,"refinementSources":try Validation.json((oldSources.filter{!ids.contains($0["id"] as? String ?? "")}+sources).filter{retained.contains($0["id"] as? String ?? "")})])
     }
     public func search(_ query: String) throws -> [[String: Any]] {
         let needle=query.lowercased()

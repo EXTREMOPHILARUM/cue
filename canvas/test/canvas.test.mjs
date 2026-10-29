@@ -25,7 +25,7 @@ test('OpenUI canvas renders coaching, emits feedback and persists without networ
   await wait(() => dom.window.document.body.textContent.includes('What would success'));
   assert.match(dom.window.document.body.textContent,/Listen first/);
   assert.equal(dom.window.document.querySelectorAll('h1').length,1);
-  assert.equal(dom.window.document.querySelector('.question-label').textContent,'Suggested question');
+  assert.equal(dom.window.document.querySelector('.question-label').textContent,'Suggested response');
   assert.equal(dom.window.document.querySelector('.points h2').textContent,'Keep in mind');
   [...dom.window.document.querySelectorAll('button')].find(b=>b.textContent==='Covered').click();
   assert.equal(events.at(-1).action,'asked');
@@ -64,4 +64,25 @@ test('coaching text and action colors meet contrast in both themes',async () => 
       assert.ok((Math.max(...values)+0.05)/(Math.min(...values)+0.05)>=4.5,`${foreground} on ${background}`);
     }
   }
+});
+
+test('coaching keeps bounded read-only history, preserves feedback ownership, and clears on another call',async()=>{
+  const dom=new JSDOM('<div id="root"></div>',{runScripts:'dangerously',url:'file:///canvas/index.html'});
+  dom.window.ResizeObserver=class{observe(){}disconnect(){}};
+  const events=[];dom.window.webkit={messageHandlers:{ready:{postMessage(){}},feedback:{postMessage:value=>events.push(value)}}};
+  dom.window.eval(bundle.outputFiles[0].text);
+  const wait=async test=>{for(let i=0;i<100;i++){if(test())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('History did not settle');};
+  await wait(()=>dom.window.callAssistant);
+  const update=(id,session='call-a')=>dom.window.callAssistant.update({id,session,headline:id,fallback:'Useful response '+id,points:['Concrete next step'],program:`root = Canvas(Coach("${id}", "Useful response ${id}", [], ""), [])`},session);
+  update('first');await wait(()=>dom.window.document.querySelector('.coach h1')?.textContent==='first');
+  update('second');await wait(()=>dom.window.document.querySelector('.coaching-history'));
+  assert.match(dom.window.document.querySelector('.coaching-history').textContent,/Useful response first/);
+  assert.equal(dom.window.document.querySelectorAll('.coaching-history button').length,0);
+  dom.window.document.querySelector('.coach button').click();assert.equal(events.at(-1).coachingID,'second');
+  dom.window.callAssistant.update(null,'call-a');await wait(()=>dom.window.document.querySelectorAll('.coaching-history article').length===2);
+  update('another','call-b');await wait(()=>dom.window.document.querySelector('.coach h1')?.textContent==='another');
+  assert.equal(dom.window.document.querySelector('.coaching-history'),null);
+  for(let i=0;i<15;i++){update('item-'+i,'call-b');await wait(()=>dom.window.document.querySelector('.coach h1')?.textContent==='item-'+i);}
+  assert.equal(dom.window.document.querySelectorAll('.coaching-history article').length,12);
+  dom.window.close();
 });

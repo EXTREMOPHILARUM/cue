@@ -344,7 +344,7 @@ struct LibraryView: View {
                             }
                             let refined=(try? model.store.refinedTranscript(detail)) ?? []
                             if !refined.isEmpty {
-                                Text("Refined from Whisper + Meet captions · AI generated").font(.caption).foregroundStyle(.secondary)
+                                Text("AI-refined turns with pending originals · Whisper + Meet captions").font(.caption).foregroundStyle(.secondary)
                                 CallTranscript(segments:refined.compactMap(TranscriptSegment.init))
                                 DisclosureGroup("Original source transcripts") {CallTranscript(segments:segments.compactMap(TranscriptSegment.init))}
                             } else {CallTranscript(segments:segments.compactMap(TranscriptSegment.init))}

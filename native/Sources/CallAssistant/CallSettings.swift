@@ -38,6 +38,8 @@ struct CallSettings:View {
                             }
                         }
                         Toggle("Summarize completed calls automatically",isOn:$model.automaticSummaries).disabled(!model.aiConsentGranted)
+                        Toggle("Refine the transcript while a call is active",isOn:$model.liveRefinementEnabled).disabled(!model.aiConsentGranted)
+                        Text("Checks recent speech at most every 30 seconds, between coaching requests. Original transcript and audio are retained.").font(.caption).foregroundStyle(CallPalette.muted)
                         Text("Call text and attached context are shared with this provider for summaries and coaching. Audio stays on this Mac.")
                             .font(.caption).foregroundStyle(CallPalette.muted)
                     }
